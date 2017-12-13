@@ -1,0 +1,110 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  UartFile.vhd
+10.	--
+11.	--  AUTHOR: Everton Alceu Carara (everton.carara@pucrs.br)
+12.	--
+13.	--  DATE CREATED: 2/12/2009
+14.	--
+15.	--  Brief description:  Writes strings from Echo() and puts() to the log_file.
+16.	--
+17.	------------------------------------------------------------------------------------------------
+18.	
+19.	library ieee;
+20.	use ieee.std_logic_1164.all;
+21.	use ieee.std_logic_misc.all;
+22.	use ieee.std_logic_arith.all;
+23.	use ieee.std_logic_textio.all;
+24.	use ieee.std_logic_unsigned.all;
+25.	use std.textio.all;
+26.	use work.mlite_pack.all;
+27.	
+28.	entity UartFile is
+29.		generic(log_file : string := "UNUSED");
+30.		port(
+31.			reset		: in std_logic;
+32.	        data_av		: in std_logic;
+33.	        data_in 	: in std_logic_vector(31 downto 0));
+34.		end;
+35.	
+36.	architecture logic of UartFile is
+37.	
+38.	type state is (S0, S1);
+39.	signal CS: state;
+40.	
+41.	begin
+42.	
+43.	
+44.		process(data_av,reset)
+45.		file store_file : text open write_mode is log_file;
+46.		variable file_line : line;
+47.		variable line_type: character;
+48.	    variable line_length : natural := 0;
+49.	    variable str: string (1 to 4);
+50.	    variable str_end: boolean;
+51.	    begin
+52.			if reset = '1' then
+53.				str_end := false;
+54.				CS <= S0;
+55.				
+56.			elsif rising_edge(data_av) then
+57.				case CS is
+58.					when S0 =>
+59.						-- Reads the incoming string
+60.						line_type := character'val(conv_integer(data_in(7 downto 0)));
+61.						
+62.						-- Verifies if the string is from Echo()
+63.						if line_type = '$' then 
+64.							write(file_line, line_type);
+65.							line_length := line_length + 1;
+66.							CS <= S1;
+67.						
+68.						-- Writes the string to the file
+69.						else									
+70.							str(4) := character'val(conv_integer(data_in(7 downto 0)));
+71.							str(3) := character'val(conv_integer(data_in(15 downto 8)));
+72.							str(2) := character'val(conv_integer(data_in(23 downto 16)));
+73.							str(1) := character'val(conv_integer(data_in(31 downto 24)));
+74.							
+75.							str_end := false;
+76.							
+77.							for i in 1 to 4 loop								
+78.								-- Writes a string in the line
+79.								if str(i) /= lf and str(i) /= nul and not str_end then
+80.									write(file_line, str(i));
+81.									line_length := line_length + 1;
+82.							
+83.								-- Detects the string end
+84.								elsif str(i) = nul then
+85.									str_end := true;
+86.								
+87.								-- Line feed detected. Writes the line in the file
+88.								elsif str(i) = lf then								    
+89.									writeline(store_file, file_line);
+90.									line_length := 0;
+91.								end if;
+92.							end loop;
+93.						end if;
+94.											
+95.					-- Receives from plasma the source processor, source task and writes them to the file
+96.					when S1 =>
+97.						write(file_line, ',');
+98.						write(file_line, conv_integer(data_in(7 downto 0)));								
+99.						line_length := line_length + 1;
+100.						
+101.						if line_length = 3 then 
+102.							write(file_line, ',');
+103.							CS <= S0;
+104.						else
+105.							CS <= S1;
+106.						end if;
+107.					end case;
+108.			end if;
+109.		end process;
+110.	end; 

@@ -1,0 +1,325 @@
+1.	import HeMPS_defaults::*;
+	|
+ncvhdl_p: *E,EXPACE (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,1|0): expecting a library unit [11.1].
+2.	
+3.	module Bus_Wrapper #(
+	                   |
+ncvhdl_p: *E,UNKCHR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,3|19): unrecognizable character '#' [13.2].
+4.		parameter[15:0] router_address = 16'h0000)
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|15): based literal character not less than the base (']') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|16): based literal character not less than the base (' ') [13.4.2].
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|17): based literal character not less than the base ('R') [13.4.2].
+		                 |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|18): based literal character not less than the base ('O') [13.4.2].
+		                  |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|19): based literal character not less than the base ('U') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|20): based literal character not less than the base ('T') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|22): based literal character not less than the base ('R') [13.4.2].
+		                          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|27): based literal character not less than the base ('R') [13.4.2].
+		                            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|29): based literal character not less than the base ('S') [13.4.2].
+		                             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|30): based literal character not less than the base ('S') [13.4.2].
+		                              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|31): based literal character not less than the base (' ') [13.4.2].
+		                               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|32): based literal character not less than the base ('=') [13.4.2].
+		                                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|33): based literal character not less than the base (' ') [13.4.2].
+		                                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|36): based literal character not less than the base (''') [13.4.2].
+		                                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|37): based literal character not less than the base ('H') [13.4.2].
+		                                         |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|42): based literal character not less than the base (')') [13.4.2].
+		                                          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,4|43): based literal character not less than the base ('LF') [13.4.2].
+5.	(
+6.		input clock,
+7.		input reset,
+8.		input [4:0] rx,
+		          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,8|11): based literal character not less than the base (']') [13.4.2].
+		           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,8|12): based literal character not less than the base (' ') [13.4.2].
+		            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,8|13): based literal character not less than the base ('R') [13.4.2].
+		             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,8|14): based literal character not less than the base ('X') [13.4.2].
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,8|15): based literal character not less than the base (',') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,8|16): based literal character not less than the base ('LF') [13.4.2].
+9.		input [4:0] clock_rx,
+		          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|11): based literal character not less than the base (']') [13.4.2].
+		           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|12): based literal character not less than the base (' ') [13.4.2].
+		            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|13): based literal character not less than the base ('C') [13.4.2].
+		             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|14): based literal character not less than the base ('L') [13.4.2].
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|15): based literal character not less than the base ('O') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|16): based literal character not less than the base ('C') [13.4.2].
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|17): based literal character not less than the base ('K') [13.4.2].
+		                  |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|19): based literal character not less than the base ('R') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|20): based literal character not less than the base ('X') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|21): based literal character not less than the base (',') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,9|22): based literal character not less than the base ('LF') [13.4.2].
+10.		input [4:0] credit_i,
+		          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|11): based literal character not less than the base (']') [13.4.2].
+		           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|12): based literal character not less than the base (' ') [13.4.2].
+		            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|13): based literal character not less than the base ('C') [13.4.2].
+		             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|14): based literal character not less than the base ('R') [13.4.2].
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|15): based literal character not less than the base ('E') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|16): based literal character not less than the base ('D') [13.4.2].
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|17): based literal character not less than the base ('I') [13.4.2].
+		                 |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|18): based literal character not less than the base ('T') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|20): based literal character not less than the base ('I') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|21): based literal character not less than the base (',') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,10|22): based literal character not less than the base ('LF') [13.4.2].
+11.		input regflit [4:0] data_in,
+		                  |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|19): based literal character not less than the base (']') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|20): based literal character not less than the base (' ') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|21): based literal character not less than the base ('D') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|22): based literal character not less than the base ('A') [13.4.2].
+		                      |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|23): based literal character not less than the base ('T') [13.4.2].
+		                       |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|24): based literal character not less than the base ('A') [13.4.2].
+		                         |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|26): based literal character not less than the base ('I') [13.4.2].
+		                          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|27): based literal character not less than the base ('N') [13.4.2].
+		                           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|28): based literal character not less than the base (',') [13.4.2].
+		                            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,11|29): based literal character not less than the base ('LF') [13.4.2].
+12.		output [4:0] tx,
+		           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,12|12): based literal character not less than the base (']') [13.4.2].
+		            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,12|13): based literal character not less than the base (' ') [13.4.2].
+		             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,12|14): based literal character not less than the base ('T') [13.4.2].
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,12|15): based literal character not less than the base ('X') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,12|16): based literal character not less than the base (',') [13.4.2].
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,12|17): based literal character not less than the base ('LF') [13.4.2].
+13.		output [4:0] clock_tx,
+		           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|12): based literal character not less than the base (']') [13.4.2].
+		            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|13): based literal character not less than the base (' ') [13.4.2].
+		             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|14): based literal character not less than the base ('C') [13.4.2].
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|15): based literal character not less than the base ('L') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|16): based literal character not less than the base ('O') [13.4.2].
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|17): based literal character not less than the base ('C') [13.4.2].
+		                 |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|18): based literal character not less than the base ('K') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|20): based literal character not less than the base ('T') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|21): based literal character not less than the base ('X') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|22): based literal character not less than the base (',') [13.4.2].
+		                      |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,13|23): based literal character not less than the base ('LF') [13.4.2].
+14.		output [4:0] credit_o,
+		           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|12): based literal character not less than the base (']') [13.4.2].
+		            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|13): based literal character not less than the base (' ') [13.4.2].
+		             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|14): based literal character not less than the base ('C') [13.4.2].
+		              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|15): based literal character not less than the base ('R') [13.4.2].
+		               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|16): based literal character not less than the base ('E') [13.4.2].
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|17): based literal character not less than the base ('D') [13.4.2].
+		                 |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|18): based literal character not less than the base ('I') [13.4.2].
+		                  |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|19): based literal character not less than the base ('T') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|21): based literal character not less than the base ('O') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|22): based literal character not less than the base (',') [13.4.2].
+		                      |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,14|23): based literal character not less than the base ('LF') [13.4.2].
+15.		output regflit [4:0] data_out,
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|20): based literal character not less than the base (']') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|21): based literal character not less than the base (' ') [13.4.2].
+		                     |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|22): based literal character not less than the base ('D') [13.4.2].
+		                      |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|23): based literal character not less than the base ('A') [13.4.2].
+		                       |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|24): based literal character not less than the base ('T') [13.4.2].
+		                        |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|25): based literal character not less than the base ('A') [13.4.2].
+		                          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|27): based literal character not less than the base ('O') [13.4.2].
+		                           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|28): based literal character not less than the base ('U') [13.4.2].
+		                            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|29): based literal character not less than the base ('T') [13.4.2].
+		                             |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|30): based literal character not less than the base (',') [13.4.2].
+		                              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,15|31): based literal character not less than the base ('LF') [13.4.2].
+16.		//Bus
+17.		input rx_b,
+18.		input credit_i_b,
+19.		input regflit data_in_b,
+20.		output tx_b,
+21.		output regflit tx_addr_b,
+22.		output credit_o_b,
+23.		output regflit data_out_b,
+24.		//Bus Arbiter Interface
+25.		output ack,
+26.		input grant,
+27.		output request,
+28.		output using_bus
+29.	);
+30.	
+31.	 wire regflit data_out_noc;
+32.	 wire regflit tx_addr_fake;
+33.	 wire tx_change_flit;
+34.	 wire ackb;
+35.	
+36.	 // Bridge to NoC
+37.	 RouterCC#(
+	         |
+ncvhdl_p: *E,UNKCHR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,37|9): unrecognizable character '#' [13.2].
+38.		.address(router_address)
+39.	 ) Rx(
+40.		.clock(clock),
+41.		.reset(reset),
+42.		.clock_tx(clock_tx),
+43.		.clock_rx(clock_rx),
+44.		.tx(tx),
+45.		.rx(rx),
+46.		.data_in(data_in),
+47.		.data_out(data_out),
+48.		.credit_i(credit_i),
+49.		.credit_o(credit_o)
+50.	 );
+51.	
+52.	 // Bridge to Bus
+53.	 Bus_BridgeRR NoC_BBRR(
+54.		.clock(clock),
+55.		.reset(reset),
+56.		// Router X
+57.		.rx(tx[4]),
+58.		.data_in(data_out[4]),
+59.		.credit_o(credit_i[4]),
+60.		// bus
+61.		.data_out(data_out_b),
+62.		.credit_i(credit_i_b),
+63.		.tx(tx_b),
+64.		.tx_addr(tx_addr_fake),
+65.		.ack(ackb),
+66.		.grant(grant),
+67.		.request(request),
+68.		.using_bus(using_bus),
+69.		.tx_change_flit(tx_change_flit)
+70.	 );
+71.	
+72.	 always @ (posedge tx[4]) begin
+	        |
+ncvhdl_p: *E,UNKCHR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,72|8): unrecognizable character '@' [13.2].
+73.		data_out[4][15:0] = data_out[4][31:16];
+		                |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|17): based literal character not less than the base (']') [13.4.2].
+		                 |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|18): based literal character not less than the base (' ') [13.4.2].
+		                  |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|19): based literal character not less than the base ('=') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|20): based literal character not less than the base (' ') [13.4.2].
+		                      |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|23): based literal character not less than the base ('T') [13.4.2].
+		                         |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|26): based literal character not less than the base ('O') [13.4.2].
+		                          |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|27): based literal character not less than the base ('U') [13.4.2].
+		                           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|28): based literal character not less than the base ('T') [13.4.2].
+		                            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|29): based literal character not less than the base ('[') [13.4.2].
+		                              |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|31): based literal character not less than the base (']') [13.4.2].
+		                               |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,73|32): based literal character not less than the base ('[') [13.4.2].
+74.		data_out[4][31:16] = 16'h00;
+		             |
+ncvhdl_p: *E,BLBOFR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|14): based literal base out of bounds [13.4.2].
+		                 |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|18): based literal character not less than the base (']') [13.4.2].
+		                  |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|19): based literal character not less than the base (' ') [13.4.2].
+		                   |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|20): based literal character not less than the base ('=') [13.4.2].
+		                    |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|21): based literal character not less than the base (' ') [13.4.2].
+		                       |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|24): based literal character not less than the base (''') [13.4.2].
+		                        |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|25): based literal character not less than the base ('H') [13.4.2].
+		                           |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|28): based literal character not less than the base (';') [13.4.2].
+		                            |
+ncvhdl_p: *E,BLCOOR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,74|29): based literal character not less than the base ('LF') [13.4.2].
+75.		tx_addr_b = data_out[4];
+76.		@(posedge clock);
+		|
+ncvhdl_p: *E,UNKCHR (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,76|1): unrecognizable character '@' [13.2].
+77.	 end
+78.	
+79.	 assign rx[4]        = rx_b;
+80.	 assign data_in[4]   = data_in_b;
+81.	 assign clock_rx[4]  = clock;
+82.	 assign credit_o_b   = credit_o[4];
+83.	 assign data_out_noc = data_out[4];
+84.	 assign ack          = ackb;
+85.	
+86.	endmodule: Bus_Wrapper
+ncvhdl_p: *E,UXPEOF (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_RR/Bus_Wrapper.sv,86): unexpected end of file.

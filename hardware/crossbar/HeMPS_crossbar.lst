@@ -1,0 +1,180 @@
+1.	library IEEE;
+2.	use ieee.std_logic_1164.all;
+3.	use IEEE.math_real.all;
+4.	use ieee.std_logic_arith.all;
+5.	use ieee.std_logic_unsigned.all;
+6.	use work.HeMPS_PKG.all;
+7.	use work.HeMPS_defaults.all;
+8.	
+9.	entity HeMPS_crossbar is
+10.	        generic (
+11.	            mlite_description   : string := "RTL";
+12.	            router_description  : string := "RTL";
+13.	            ram_description     : string := "RTL"
+14.	        );
+15.	        port (
+16.	                clock                          : in    std_logic;
+17.	                reset                          : in    std_logic;
+18.	                -- Tasks repository interface
+19.	                mem_addr                       : out   std_logic_vector(29 downto 0);
+20.	                data_read                      : in    std_logic_vector(31 downto 0);
+21.	                -- Debug interface
+22.	                write_enable_debug             : out   std_logic;
+23.	                data_out_debug                 : out   std_logic_vector(31 downto 0);
+24.	                busy_debug                     : in    std_logic;
+25.	                --Dynamic Insertion of Applications
+26.	                ack_app                        : out  std_logic;
+27.	                req_app                        : in  std_logic_vector(31 downto 0)
+28.	        );
+29.	
+30.	end entity HeMPS_crossbar;
+31.	
+32.	architecture HeMPS_crossbar of HeMPS_crossbar is  
+33.		-- Control Bus
+34.		signal tx             : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+35.		signal credit_i       : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+36.		signal credit_o       : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+37.		signal bus_rx	      : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+38.	        signal data_out       : arrayNregflit := (others=>(others=>'0'));
+39.	        signal data_in        : arrayNregflit := (others=>(others=>'0'));
+40.		-- Crossbar Arb Interface
+41.	        signal tx_addr        : arrayNregflit := (others=>(others=>'0'));
+42.		signal tx_change_flit : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+43.		signal grant          : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+44.		signal request        : std_logic_vector(NUMBER_PROCESSORS-1 downto 0) := (others=>'0');
+45.	
+46.	begin
+47.	        proc: for i in 0 to (NUMBER_PROCESSORS-1) generate
+48.	
+49.	                mas:if (kernel_type(i) = "mas") generate     
+50.	                        master: entity work.plasma_cross
+51.	                        generic map (
+52.	                                memory_type             => "TRI",
+53.	                                router_address          => RouterAddress(i),
+54.	                                mlite_description       => mlite_description,
+55.	                                ram_description         => ram_description,
+56.	                                is_master               => '1'
+57.	                                )
+58.	                        port map(
+59.					address_sc      => RouterAddress(i),
+60.	                                clock           => clock,
+61.	                                reset           => reset,
+62.	
+63.	                                tx              => tx(i),
+64.	                                data_out        => data_out(i),
+65.	                                credit_i        => credit_i(i),
+66.					tx_addr         => tx_addr(i),
+67.	                                rx              => bus_rx(i),
+68.	                                data_in         => data_in(i),
+69.	                                credit_o        => credit_o(i),
+70.					tx_change_flit  => tx_change_flit(i),
+71.					request         => request(i),
+72.					grant           => grant(i),
+73.	
+74.	                                address         => mem_addr,
+75.	                                data_read       => data_read,
+76.	
+77.	                                write_enable_debug  => write_enable_debug,
+78.	                                data_out_debug      => data_out_debug,
+79.	                                busy_debug          => busy_debug,
+80.	                                
+81.	                                ack_app        => ack_app,
+82.	                                req_app        => req_app
+83.	
+84.	                        );         
+85.	                end generate mas;   
+86.	
+87.	                loc:if (kernel_type(i) = "loc" ) generate
+88.	                        slave: entity work.plasma_cross
+89.	                        generic map (
+90.	                                memory_type             => "TRI",
+91.	                                router_address          => RouterAddress(i),
+92.	                                mlite_description       => mlite_description,
+93.	                                ram_description         => ram_description,
+94.	                                log_file                => log_filename(i),
+95.	                                is_master               => '1'
+96.	                                )
+97.	                        port map(
+98.	                                address_sc      => RouterAddress(i),
+99.	                                clock           => clock,
+100.	                                reset           => reset,
+101.					--
+102.	                                tx              => tx(i),
+103.	                                data_out        => data_out(i),
+104.	                                credit_i        => credit_i(i),
+105.					tx_addr         => tx_addr(i),
+106.	                                rx              => bus_rx(i),
+107.	                                data_in         => data_in(i),
+108.	                                credit_o        => credit_o(i),
+109.					tx_change_flit  => tx_change_flit(i),
+110.					request         => request(i),
+111.					grant           => grant(i),
+112.	
+113.	                                address         => open,
+114.	                                data_read       => (others => '0'),
+115.	
+116.	                                write_enable_debug  => open,
+117.	                                data_out_debug      => open,
+118.	                                busy_debug          => '0',
+119.	                                
+120.	                                ack_app        => open,
+121.	                                req_app        => (others=>'0')
+122.	                        );
+123.			end generate loc;
+124.	
+125.	                slav:if (kernel_type(i) = "sla" ) generate
+126.	                        slave: entity work.plasma_cross
+127.	                        generic map (
+128.	                                memory_type             => "TRI",
+129.	                                router_address          => RouterAddress(i),
+130.	                                mlite_description       => mlite_description,
+131.	                                ram_description         => ram_description,
+132.	                                log_file                => log_filename(i),
+133.	                                is_master               => '0'
+134.	                                )
+135.	                        port map(
+136.	                                address_sc      => RouterAddress(i),
+137.	                                clock           => clock,
+138.	                                reset           => reset,
+139.					--
+140.	                                tx              => tx(i),
+141.	                                data_out        => data_out(i),
+142.	                                credit_i        => credit_i(i),
+143.					tx_addr         => tx_addr(i),
+144.	                                rx              => bus_rx(i),
+145.	                                data_in         => data_in(i),
+146.	                                credit_o        => credit_o(i),
+147.					tx_change_flit  => tx_change_flit(i),
+148.					request         => request(i),
+149.					grant           => grant(i),
+150.	
+151.	                                address         => open,
+152.	                                data_read       => (others => '0'),
+153.	
+154.	                                write_enable_debug  => open,
+155.	                                data_out_debug      => open,
+156.	                                busy_debug          => '0',
+157.	                                
+158.	                                ack_app        => open,
+159.	                                req_app        => (others=>'0')
+160.	                        );
+161.	                end generate slav;
+162.		end generate proc;
+163.	
+164.		-- Cross Interface -----------------------
+165.		CROSSGEN: entity work.crossgen
+166.			port map(
+167.				clock    => clock,
+168.				reset    => reset,
+169.	            		data_in  => data_in,
+170.				data_out => data_out,
+171.	            		tx       => tx,
+172.				rx 	 => bus_rx,
+173.				credit_o => credit_o,
+174.				credit_i => credit_i,
+175.	           		tx_addr  => tx_addr,
+176.				grant  	 => grant,
+177.				request	 => request
+178.			);
+179.			
+180.	end architecture HeMPS_crossbar;

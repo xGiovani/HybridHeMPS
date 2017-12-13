@@ -1,0 +1,215 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  mult.vhd
+10.	--
+11.	--  AUTHORS: Steve Rhoads (rhoadss@yahoo.com)
+12.	--
+13.	--  DATE CREATED: 1/31/01
+14.	--
+15.	--  COPYRIGHT: Software placed into the public domain by the author.
+16.	--     Software 'as is' without warranty.  Author liable for nothing.
+17.	--
+18.	--  Brief description:  Implements the multiplication and division unit in 32 clocks.
+19.	--
+20.	------------------------------------------------------------------------------------------------
+21.	
+22.	--
+23.	-- MULTIPLICATION
+24.	-- long64 answer = 0
+25.	-- for(i = 0; i < 32; ++i)
+26.	-- {
+27.	--    answer = (answer >> 1) + (((b&1)?a:0) << 31);
+28.	--    b = b >> 1;
+29.	-- }
+30.	--
+31.	-- DIVISION
+32.	-- long upper=a, lower=0;
+33.	-- a = b << 31;
+34.	-- for(i = 0; i < 32; ++i)
+35.	-- {
+36.	--    lower = lower << 1;
+37.	--    if(upper >= a && a && b < 2)
+38.	--    {
+39.	--       upper = upper - a;
+40.	--       lower |= 1;
+41.	--    }
+42.	--    a = ((b&2) << 30) | (a >> 1);
+43.	--    b = b >> 1;
+44.	-- }
+45.	---------------------------------------------------------------------
+46.	library ieee;
+47.	use ieee.std_logic_1164.all;
+48.	use ieee.std_logic_unsigned.all;
+49.	use IEEE.std_logic_arith.all;
+50.	use work.mlite_pack.all;
+51.	
+52.	entity mult is
+53.	   generic(mult_type  : string := "DEF");
+54.	   port(clk       : in std_logic;
+55.	        reset_in  : in std_logic;
+56.	        a, b      : in std_logic_vector(31 downto 0);
+57.	        mult_func : in mult_function_type;
+58.	        c_mult    : out std_logic_vector(31 downto 0);
+59.	        pause_out : out std_logic);
+60.	end; --entity mult
+61.	
+62.	architecture logic of mult is
+63.	
+64.	   constant MODE_MULT : std_logic := '1';
+65.	   constant MODE_DIV  : std_logic := '0';
+66.	
+67.	   signal mode_reg    : std_logic;
+68.	   signal negate_reg  : std_logic;
+69.	   signal sign_reg    : std_logic;
+70.	   signal sign2_reg   : std_logic;
+71.	   signal count_reg   : std_logic_vector(5 downto 0);
+72.	   signal aa_reg      : std_logic_vector(31 downto 0);
+73.	   signal bb_reg      : std_logic_vector(31 downto 0);
+74.	   signal upper_reg   : std_logic_vector(31 downto 0);
+75.	   signal lower_reg   : std_logic_vector(31 downto 0);
+76.	
+77.	   signal a_neg       : std_logic_vector(31 downto 0);
+78.	   signal b_neg       : std_logic_vector(31 downto 0);
+79.	   signal sum         : std_logic_vector(32 downto 0);
+80.	   
+81.	begin
+82.	 
+83.	   -- Result
+84.	   c_mult <= lower_reg when mult_func = MULT_READ_LO and negate_reg = '0' else 
+85.	             bv_negate(lower_reg) when mult_func = MULT_READ_LO 
+86.	                and negate_reg = '1' else
+87.	             upper_reg when mult_func = MULT_READ_HI else 
+88.	             ZERO;
+89.	   pause_out <= '1' when (count_reg /= "000000") and 
+90.	             (mult_func = MULT_READ_LO or mult_func = MULT_READ_HI) else '0';
+91.	
+92.	   -- ABS and remainder signals
+93.	   a_neg <= bv_negate(a);
+94.	   b_neg <= bv_negate(b);
+95.	   sum <= bv_adder(upper_reg, aa_reg, mode_reg);
+96.	    
+97.	   --multiplication/division unit
+98.	   mult_proc: process(clk, reset_in, a, b, mult_func,
+99.	      a_neg, b_neg, sum, sign_reg, mode_reg, negate_reg, 
+100.	      count_reg, aa_reg, bb_reg, upper_reg, lower_reg)
+101.	      variable count : std_logic_vector(2 downto 0);
+102.	   begin
+103.	      count := "001";
+104.	      if reset_in = '1' then
+105.	         mode_reg <= '0';
+106.	         negate_reg <= '0';
+107.	         sign_reg <= '0';
+108.	         sign2_reg <= '0';
+109.	         count_reg <= "000000";
+110.	         aa_reg <= ZERO;
+111.	         bb_reg <= ZERO;
+112.	         upper_reg <= ZERO;
+113.	         lower_reg <= ZERO;
+114.	      elsif rising_edge(clk) then
+115.	         case mult_func is
+116.	            when MULT_WRITE_LO =>
+117.	               lower_reg <= a;
+118.	               negate_reg <= '0';
+119.	            when MULT_WRITE_HI =>
+120.	               upper_reg <= a;
+121.	               negate_reg <= '0';
+122.	            when MULT_MULT =>
+123.	               mode_reg <= MODE_MULT;
+124.	               aa_reg <= a;
+125.	               bb_reg <= b;
+126.	               upper_reg <= ZERO;
+127.	               count_reg <= "100000";
+128.	               negate_reg <= '0';
+129.	               sign_reg <= '0';
+130.	               sign2_reg <= '0';
+131.	            when MULT_SIGNED_MULT =>
+132.	               mode_reg <= MODE_MULT;
+133.	               if b(31) = '0' then
+134.	                  aa_reg <= a;
+135.	                  bb_reg <= b;
+136.	                  sign_reg <= a(31);
+137.	               else
+138.	                  aa_reg <= a_neg;
+139.	                  bb_reg <= b_neg;
+140.	                  sign_reg <= a_neg(31);
+141.	               end if;
+142.	               sign2_reg <= '0';
+143.	               upper_reg <= ZERO;
+144.	               count_reg <= "100000";
+145.	               negate_reg <= '0';
+146.	            when MULT_DIVIDE =>
+147.	               mode_reg <= MODE_DIV;
+148.	               aa_reg <= b(0) & ZERO(30 downto 0);
+149.	               bb_reg <= b;
+150.	               upper_reg <= a;
+151.	               count_reg <= "100000";
+152.	               negate_reg <= '0';
+153.	            when MULT_SIGNED_DIVIDE =>
+154.	               mode_reg <= MODE_DIV;
+155.	               if b(31) = '0' then
+156.	                  aa_reg(31) <= b(0);
+157.	                  bb_reg <= b;
+158.	               else
+159.	                  aa_reg(31) <= b_neg(0);
+160.	                  bb_reg <= b_neg;
+161.	               end if;
+162.	               if a(31) = '0' then
+163.	                  upper_reg <= a;
+164.	               else
+165.	                  upper_reg <= a_neg;
+166.	               end if;
+167.	               aa_reg(30 downto 0) <= ZERO(30 downto 0);
+168.	               count_reg <= "100000";
+169.	               negate_reg <= a(31) xor b(31);
+170.	            when others =>
+171.	
+172.	               if count_reg /= "000000" then
+173.	                  if mode_reg = MODE_MULT then
+174.	                     -- Multiplication
+175.	                     if bb_reg(0) = '1' then
+176.	                        upper_reg <= (sign_reg xor sum(32)) & sum(31 downto 1);
+177.	                        lower_reg <= sum(0) & lower_reg(31 downto 1);
+178.	                        sign2_reg <= sign2_reg or sign_reg;
+179.	                        sign_reg <= '0';
+180.	                        bb_reg <= '0' & bb_reg(31 downto 1);
+181.	                     -- The following six lines are optional for speedup
+182.	                     elsif bb_reg(3 downto 0) = "0000" and sign2_reg = '0' and 
+183.	                           count_reg(5 downto 2) /= "0000" then
+184.	                        upper_reg <= "0000" & upper_reg(31 downto 4);
+185.	                        lower_reg <=  upper_reg(3 downto 0) & lower_reg(31 downto 4);
+186.	                        count := "100";
+187.	                        bb_reg <= "0000" & bb_reg(31 downto 4);
+188.	                     else
+189.	                        upper_reg <= sign2_reg & upper_reg(31 downto 1);
+190.	                        lower_reg <= upper_reg(0) & lower_reg(31 downto 1);
+191.	                        bb_reg <= '0' & bb_reg(31 downto 1);
+192.	                     end if;
+193.	                  else   
+194.	                     -- Division
+195.	                     if sum(32) = '0' and aa_reg /= ZERO and 
+196.	                           bb_reg(31 downto 1) = ZERO(31 downto 1) then
+197.	                        upper_reg <= sum(31 downto 0);
+198.	                        lower_reg(0) <= '1';
+199.	                     else
+200.	                        lower_reg(0) <= '0';
+201.	                     end if;
+202.	                     aa_reg <= bb_reg(1) & aa_reg(31 downto 1);
+203.	                     lower_reg(31 downto 1) <= lower_reg(30 downto 0);
+204.	                     bb_reg <= '0' & bb_reg(31 downto 1);
+205.	                  end if;
+206.	                  count_reg <= count_reg - count;
+207.	               end if; --count
+208.	
+209.	         end case;
+210.	         
+211.	      end if;
+212.	
+213.	   end process;
+214.	    
+215.	end; --architecture logic

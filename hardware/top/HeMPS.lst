@@ -1,0 +1,266 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  HeMPS.vhd
+10.	--
+11.	--  Brief description:  NoC generation
+12.	--
+13.	------------------------------------------------------------------------------------------------
+14.	
+15.	library IEEE;
+16.	use ieee.std_logic_1164.all;
+17.	use ieee.std_logic_arith.all;
+18.	use ieee.std_logic_unsigned.all;
+19.	use work.HeMPS_PKG.all;
+20.	use work.HeMPS_defaults.all;
+21.	
+22.	entity HeMPS is
+23.	        generic (
+24.	            mlite_description   : string := "RTL";
+25.	            router_description  : string := "RTL";
+26.	            ram_description     : string := "RTL"
+27.	        );
+28.	        port (
+29.	                clock                            : in    std_logic;
+30.	                reset                            : in    std_logic;
+31.	
+32.	                -- Tasks repository interface
+33.	                mem_addr                         : out   std_logic_vector(29 downto 0);
+34.	                data_read                        : in    std_logic_vector(31 downto 0);
+35.	
+36.	                -- Debug interface
+37.	                write_enable_debug              : out   std_logic;
+38.	                data_out_debug                  : out   std_logic_vector(31 downto 0);
+39.	                busy_debug                      : in    std_logic;
+40.	                
+41.	                ack_app                        : out  std_logic;
+42.	                req_app                        : in  std_logic_vector(31 downto 0)
+43.	        );
+44.	end;
+45.	
+46.	architecture HeMPS of HeMPS is  
+47.	
+48.	        -- Interconnection signals 
+49.	        type txNport is array(NUMBER_PROCESSORS-1 downto 0) of std_logic_vector(3 downto 0);
+50.	        signal tx       : txNPORT;
+51.	        type rxNport is array(NUMBER_PROCESSORS-1 downto 0) of std_logic_vector(3 downto 0);
+52.	        signal rx       : rxNPORT;
+53.	        type clock_rxNport is array(NUMBER_PROCESSORS-1 downto 0) of std_logic_vector(3 downto 0);
+54.	        signal clock_rx : clock_rxNPORT;
+55.	        type clock_txNport is array(NUMBER_PROCESSORS-1 downto 0) of std_logic_vector(3 downto 0);
+56.	        signal clock_tx : clock_txNPORT;
+57.	        type credit_iNport is array(NUMBER_PROCESSORS-1 downto 0) of std_logic_vector(3 downto 0);
+58.	        signal credit_i : credit_iNPORT;
+59.	        type credit_oNport is array(NUMBER_PROCESSORS-1 downto 0) of std_logic_vector(3 downto 0);
+60.	        signal credit_o : credit_oNPORT;
+61.	        type data_inNport is array(NUMBER_PROCESSORS-1 downto 0) of arrayNPORT_1_regflit;
+62.	        signal data_in  : data_inNPORT;
+63.	        type data_outNport is array(NUMBER_PROCESSORS-1 downto 0) of arrayNPORT_1_regflit;
+64.	        signal data_out : data_outNPORT;
+65.	                
+66.	        signal   address_router : std_logic_vector(7 downto 0);
+67.	        
+68.	        type router_position is array(NUMBER_PROCESSORS-1 downto 0) of integer range 0 to TR;
+69.	        signal position : router_position;
+70.	
+71.		type array_addr is array (0 to NUMBER_PROCESSORS-1) of regmetadeflit;
+72.		signal addr : array_addr;
+73.	
+74.	        begin
+75.	        
+76.	        core_type_gen:   for i in 0 to NUMBER_PROCESSORS-1 generate
+77.	                position(i) <= RouterPosition(i);
+78.	        end generate core_type_gen;
+79.	
+80.		ProcAddr: for i in 0 to NUMBER_PROCESSORS-1 generate
+81.			addr(i) <= RouterAddress(i);
+82.		end generate ProcAddr;
+83.	        
+84.	        
+85.	        proc: for i in 0 to NUMBER_PROCESSORS-1 generate
+86.	                
+87.	                mas:if (kernel_type(i) = "mas") generate     
+88.	                        master: entity work.processing_element
+89.	                        generic map (
+90.	                                memory_type             => "TRI",
+91.	                                router_address          => RouterAddress(i),
+92.	                                core_type               => core_type(i),
+93.	                                mlite_description       => mlite_description,
+94.	                                router_description      => router_description,
+95.	                                ram_description         => ram_description,
+96.	                                is_master               => '1'
+97.	                                )
+98.	                        port map(
+99.	                                address_sc      => RouterAddress(i),
+100.	                                clock           => clock,
+101.	                                reset           => reset,
+102.	                                clock_tx        => clock_tx(i),
+103.	                                tx                      => tx(i),
+104.	                                data_out        => data_out(i),
+105.	                                credit_i        => credit_i(i),
+106.	                                clock_rx        => clock_rx(i),
+107.	                                rx                      => rx(i),
+108.	                                data_in         => data_in(i),
+109.	                                credit_o        => credit_o(i),
+110.	
+111.	                                address                         => mem_addr,
+112.	                                data_read                       => data_read,
+113.	
+114.	                                write_enable_debug      => write_enable_debug,
+115.	                                data_out_debug      => data_out_debug,
+116.	                                busy_debug                      => busy_debug,
+117.	                                
+118.	                                ack_app        => ack_app,
+119.	                                req_app        => req_app
+120.	                        );         
+121.	                end generate mas;   
+122.	
+123.	                loc:if (kernel_type(i) = "loc" ) generate
+124.	                        slave: entity work.processing_element
+125.	                        generic map (
+126.	                                memory_type             => "TRI",
+127.	                                router_address          => RouterAddress(i),
+128.	                                core_type               => core_type(i),
+129.	                                mlite_description       => mlite_description,
+130.	                                router_description      => router_description,
+131.	                                ram_description         => ram_description,
+132.	                                log_file                => log_filename(i),
+133.	                                is_master               => '1'
+134.	                                )
+135.	                        port map(
+136.	                                address_sc      => RouterAddress(i),
+137.	                                clock           => clock,
+138.	                                reset           => reset,
+139.	                                clock_tx        => clock_tx(i),
+140.	                                tx                      => tx(i),
+141.	                                data_out        => data_out(i),
+142.	                                credit_i        => credit_i(i),
+143.	                                clock_rx        => clock_rx(i),
+144.	                                rx                      => rx(i),
+145.	                                data_in         => data_in(i),
+146.	                                credit_o        => credit_o(i),
+147.	
+148.	                                address                         => open,
+149.	                                data_read                       => (others => '0'),
+150.	
+151.	                                write_enable_debug      => open,
+152.	                                data_out_debug          => open,
+153.	                                busy_debug                      => '0',
+154.	                                
+155.	                                ack_app        => open,
+156.	                                req_app        => (others=>'0')
+157.	                        );
+158.	                end generate loc; 
+159.	
+160.	                slav:if (kernel_type(i) = "sla" ) generate
+161.	                        slave: entity work.processing_element
+162.	                        generic map (
+163.	                                memory_type             => "TRI",
+164.	                                router_address          => RouterAddress(i),
+165.	                                core_type               => core_type(i),
+166.	                                mlite_description       => mlite_description,
+167.	                                router_description      => router_description,
+168.	                                ram_description         => ram_description,
+169.	                                log_file                => log_filename(i),
+170.	                                is_master               => '0'
+171.	                                )
+172.	                        port map(
+173.	                                address_sc      => RouterAddress(i),
+174.	                                clock           => clock,
+175.	                                reset           => reset,
+176.	                                clock_tx        => clock_tx(i),
+177.	                                tx                      => tx(i),
+178.	                                data_out        => data_out(i),
+179.	                                credit_i        => credit_i(i),
+180.	                                clock_rx        => clock_rx(i),
+181.	                                rx                      => rx(i),
+182.	                                data_in         => data_in(i),
+183.	                                credit_o        => credit_o(i),
+184.	
+185.	                                address                         => open,
+186.	                                data_read                       => (others => '0'),
+187.	
+188.	                                write_enable_debug      => open,
+189.	                                data_out_debug          => open,
+190.	                                busy_debug                      => '0',
+191.	                                
+192.	                                ack_app        => open,
+193.	                                req_app        => (others=>'0')
+194.	                        );
+195.	                end generate slav;          
+196.	
+197.	                ------------------------------------------------------------------------------
+198.	                --- EAST PORT CONNECTIONS ----------------------------------------------------
+199.	                ------------------------------------------------------------------------------
+200.	                east_grounding: if RouterPosition(i) = BR or RouterPosition(i) = CRX or RouterPosition(i) = TR generate
+201.	                        rx(i)(EAST)             <= '0';
+202.	                        clock_rx(i)(EAST)       <= '0';
+203.	                        credit_i(i)(EAST)       <= '0';
+204.	                        data_in(i)(EAST)        <= (others => '0');
+205.	                end generate;
+206.	
+207.	                east_connection: if RouterPosition(i) = BL or RouterPosition(i) = CL or RouterPosition(i) = TL  or RouterPosition(i) = BC or RouterPosition(i) = TC or RouterPosition(i) = CC generate
+208.	                        rx(i)(EAST)             <= tx(i+1)(WEST);
+209.	                        clock_rx(i)(EAST)       <= clock_tx(i+1)(WEST);
+210.	                        credit_i(i)(EAST)       <= credit_o(i+1)(WEST);
+211.	                        data_in(i)(EAST)        <= data_out(i+1)(WEST);
+212.	                end generate;
+213.	
+214.	                ------------------------------------------------------------------------------
+215.	                --- WEST PORT CONNECTIONS ----------------------------------------------------
+216.	                ------------------------------------------------------------------------------
+217.	                west_grounding: if RouterPosition(i) = BL or RouterPosition(i) = CL or RouterPosition(i) = TL generate
+218.	                        rx(i)(WEST)             <= '0';
+219.	                        clock_rx(i)(WEST)       <= '0';
+220.	                        credit_i(i)(WEST)       <= '0';
+221.	                        data_in(i)(WEST)        <= (others => '0');
+222.	                end generate;
+223.	
+224.	                west_connection: if (RouterPosition(i) = BR or RouterPosition(i) = CRX or RouterPosition(i) = TR or  RouterPosition(i) = BC or RouterPosition(i) = TC or RouterPosition(i) = CC) generate
+225.	                        rx(i)(WEST)             <= tx(i-1)(EAST);
+226.	                        clock_rx(i)(WEST)       <= clock_tx(i-1)(EAST);
+227.	                        credit_i(i)(WEST)       <= credit_o(i-1)(EAST);
+228.	                        data_in(i)(WEST)        <= data_out(i-1)(EAST);
+229.	                end generate;
+230.	
+231.	                -------------------------------------------------------------------------------
+232.	                --- NORTH PORT CONNECTIONS ----------------------------------------------------
+233.	                -------------------------------------------------------------------------------
+234.	                north_grounding: if RouterPosition(i) = TL or RouterPosition(i) = TC or RouterPosition(i) = TR generate
+235.	                        rx(i)(NORTH)            <= '0';
+236.	                        clock_rx(i)(NORTH)      <= '0';
+237.	                        credit_i(i)(NORTH)      <= '0';
+238.	                        data_in(i)(NORTH)       <= (others => '0');
+239.	                end generate;
+240.	
+241.	                north_connection: if RouterPosition(i) = BL or RouterPosition(i) = BC or RouterPosition(i) = BR or RouterPosition(i) = CL or RouterPosition(i) = CRX or RouterPosition(i) = CC generate
+242.	                        rx(i)(NORTH)            <= tx(i+NUMBER_PROCESSORS_X)(SOUTH);
+243.	                        clock_rx(i)(NORTH)      <= clock_tx(i+NUMBER_PROCESSORS_X)(SOUTH);
+244.	                        credit_i(i)(NORTH)      <= credit_o(i+NUMBER_PROCESSORS_X)(SOUTH);
+245.	                        data_in(i)(NORTH)       <= data_out(i+NUMBER_PROCESSORS_X)(SOUTH);
+246.	                end generate;
+247.	
+248.	                --------------------------------------------------------------------------------
+249.	                --- SOUTH PORT CONNECTIONS -----------------------------------------------------
+250.	                ---------------------------------------------------------------------------
+251.	                south_grounding: if RouterPosition(i) = BL or RouterPosition(i) = BC or RouterPosition(i) = BR generate
+252.	                        rx(i)(SOUTH)            <= '0';
+253.	                        clock_rx(i)(SOUTH)      <= '0';
+254.	                        credit_i(i)(SOUTH)      <= '0';
+255.	                        data_in(i)(SOUTH)       <= (others => '0');
+256.	                end generate;
+257.	
+258.	                south_connection: if RouterPosition(i) = TL or RouterPosition(i) = TC or RouterPosition(i) = TR or RouterPosition(i) = CL or RouterPosition(i) = CRX or RouterPosition(i) = CC generate
+259.	                        rx(i)(SOUTH)            <= tx(i-NUMBER_PROCESSORS_X)(NORTH);
+260.	                        clock_rx(i)(SOUTH)      <= clock_tx(i-NUMBER_PROCESSORS_X)(NORTH);
+261.	                        credit_i(i)(SOUTH)      <= credit_o(i-NUMBER_PROCESSORS_X)(NORTH);
+262.	                        data_in(i)(SOUTH)       <= data_out(i-NUMBER_PROCESSORS_X)(NORTH);
+263.	                end generate;
+264.	        end generate proc;
+265.	           
+266.	end architecture;

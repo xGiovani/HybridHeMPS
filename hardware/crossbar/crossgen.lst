@@ -1,0 +1,139 @@
+1.	----------------------------------------------------------------------------------
+2.	-- Company: UFSM
+3.	-- Engineer: Julia Grando
+4.	-- 
+5.	-- Create Date:    15:25:32 04/30/2017 
+6.	-- Design Name: 
+7.	-- Module Name:    crossw2 - Behavioral 
+8.	-- Project Name: 
+9.	-- Target Devices: 
+10.	-- Tool versions: 
+11.	-- Description: 
+12.	--
+13.	-- Dependencies: 
+14.	--
+15.	-- Revision: 
+16.	-- Revision 0.01 - File Created
+17.	-- Additional Comments: 
+18.	--
+19.	----------------------------------------------------------------------------------
+20.	library ieee;
+21.	use ieee.std_logic_1164.all;
+22.	use IEEE.math_real.all;
+23.	use ieee.std_logic_arith.all;
+24.	use ieee.std_logic_unsigned.all;
+25.	use work.HeMPS_PKG.all;
+26.	use work.HeMPS_defaults.all;
+27.	
+28.	entity crossgen is
+29.		generic(
+30.			CrossbarID : integer := 0;
+31.			NUMBER_PROC_CROSSBAR : integer := 2
+32.		); 
+33.	    Port( 
+34.		   clock    : in std_logic;
+35.		   reset    : in std_logic;
+36.		   data_in  : out arrayNregflit(0 to NUMBER_PROC_CROSSBAR);
+37.	           data_out : in  arrayNregflit(0 to NUMBER_PROC_CROSSBAR);
+38.	           tx       : in std_logic_vector(NUMBER_PROC_CROSSBAR downto 0);
+39.		   rx 	    : out std_logic_vector(NUMBER_PROC_CROSSBAR downto 0);
+40.		   credit_i : out std_logic_vector(NUMBER_PROC_CROSSBAR downto 0);
+41.		   credit_o : in std_logic_vector(NUMBER_PROC_CROSSBAR downto 0);
+42.	           tx_addr  : in  arrayNregflit(0 to NUMBER_PROC_CROSSBAR);
+43.		   grant    : out std_logic_vector(NUMBER_PROC_CROSSBAR downto 0);
+44.		   request  : in std_logic_vector(NUMBER_PROC_CROSSBAR downto 0)
+45.	    );
+46.	end crossgen;
+47.	
+48.	architecture STRUCT of crossgen is
+49.		type array_NumProc is array(0 to NUMBER_PROC_CROSSBAR) of std_logic_vector(NUMBER_PROC_CROSSBAR downto 0);
+50.		signal RQ, GR: array_NumProc;
+51.	
+52.		signal Proc_Addr: Proc_Addresses(0 to NUMBER_PROC_CROSSBAR);
+53.	
+54.		component BUS_ARB_GEN
+55.			generic(
+56.				NUMBER_PROC_CROSSBAR : integer := 2);
+57.			port(
+58.				reset : in STD_LOGIC;
+59.				REQ   : in  STD_LOGIC_VECTOR(NUMBER_PROC_CROSSBAR downto 0);
+60.				GRANT : out std_logic_vector(NUMBER_PROC_CROSSBAR downto 0));
+61.		end component; 
+62.			
+63.	begin
+64.		-- Generate Crossbar Processors Addresses
+65.		Proc_Addr <= Crossbar_Proc_Addr when NUMBER_CROSSBARS = 1 else 
+66.			     Crossbar_Proc_Addrs(CrossbarID)(0 to NUMBER_PROC_CROSSBAR);
+67.	
+68.		-- Crossbar Arbiter
+69.		ENB:for i in 0 to NUMBER_PROC_CROSSBAR generate
+70.			GB:BUS_ARB_GEN 
+71.				generic map(
+72.					NUMBER_PROC_CROSSBAR => NUMBER_PROC_CROSSBAR)
+73.	 			port map(
+74.					reset,
+75.					RQ(i),
+76.					GR(i));
+77.		end generate;
+78.	
+79.		crossbar: process(all)
+80.		variable toWrapper : std_logic := '0'; -- variable to indicate if the target element is a processor or the wrapper
+81.		variable target, target_j : integer := 0;
+82.		begin
+83.		toWrapper := '1';
+84.		for i in 0 to NUMBER_PROC_CROSSBAR loop
+85.			for aux in 0 to NUMBER_PROC_CROSSBAR-1 loop
+86.				if tx_addr(i)(15 downto 0)  = Proc_Addr(aux)(15 downto 0)  then
+87.					target := aux;
+88.					toWrapper := '0';
+89.				end if;
+90.			end loop;
+91.			if toWrapper = '1' then
+92.				target := NUMBER_PROC_CROSSBAR; -- Activate wrapper rx
+93.			end if;
+94.			rx(i) <= '0';
+95.			grant(i) <= '0';
+96.			toWrapper := '1';
+97.			for j in 0 to NUMBER_PROC_CROSSBAR loop
+98.				for aux in 0 to NUMBER_PROC_CROSSBAR-1 loop
+99.					if tx_addr(j)(15 downto 0)  = Proc_Addr(aux)(15 downto 0)  then
+100.						target_j := aux;
+101.						toWrapper := '0';
+102.					end if;
+103.				end loop;
+104.				if toWrapper = '1' then
+105.					target_j := NUMBER_PROC_CROSSBAR; -- Activate wrapper rx
+106.				end if;
+107.				-- Handles Request
+108.				 if request(i)='1' and tx_addr(i)(15 downto 0)  = Proc_Addr(j)(15 downto 0)  then
+109.					 RQ(j)(i) <= '1';
+110.				 elsif request(i)='1' and target = NUMBER_PROC_CROSSBAR then -- Crossbar Wrapper
+111.					 RQ(NUMBER_PROC_CROSSBAR)(i) <= '1';
+112.				 else
+113.					 RQ(j)(i) <= '0';
+114.				 end if;
+115.				-- Data output
+116.				if (i/=j and GR(j)(i) = '1') then
+117.					data_in(j) <= data_out(i);
+118.				end if;
+119.				-- Activates Rx
+120.				if tx(j)='1' and tx_addr(j)(15 downto 0)  = Proc_Addr(i)(15 downto 0)  then
+121.					rx(i) <= '1';
+122.				elsif tx(j)= '1' and target_j = NUMBER_PROC_CROSSBAR then -- Crossbar Wrapper
+123.					rx(NUMBER_PROC_CROSSBAR) <= '1';
+124.				--else
+125.					--rx(i) <= '0';
+126.				end if;
+127.				-- Handles Credit
+128.				if GR(j)(i) = '1' then
+129.					grant(i) <= '1';
+130.					credit_i(j) <= credit_o(i);
+131.				--else
+132.					--grant(i) <= '0';
+133.				end if;
+134.			end loop;
+135.		end loop;
+136.		end process crossbar;
+137.	end STRUCT; 
+138.	
+139.	

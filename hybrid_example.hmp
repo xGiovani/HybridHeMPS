@@ -1,0 +1,40 @@
+[project name]
+test
+[tasks per pe]
+1
+[processor description]
+rtl
+[noc buffer size]
+8
+[noc routing algorithm]
+xy
+[mapping]
+WithLoad
+[dimensions]
+4
+4
+[cluster size]
+4
+4
+[injectors]
+0
+[bus count]
+2
+[proc per bus]
+3
+4
+[bus position]
+1
+15
+[crossbar count]
+1
+[proc per crossbar]
+4
+[crossbar position]
+12
+[masters location]
+LB
+[global master]
+0
+[application]
+prod_cons

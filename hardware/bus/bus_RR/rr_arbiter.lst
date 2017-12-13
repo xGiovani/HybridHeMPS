@@ -1,0 +1,52 @@
+1.	-- http://www.krll.de/portfolio/vhdl-round-robin-arbiter/
+2.	-- Round Robin Arbiter
+3.	library ieee;
+4.	use ieee.std_logic_1164.all;
+5.	use ieee.numeric_std.all;
+6.	use work.HeMPS_defaults.all;
+7.	
+8.	entity rr_arbiter is
+9.		generic(
+10.			NUMBER_PROC_BUS : integer := 2
+11.		);
+12.		port (
+13.			clock   : in  std_logic;
+14.			reset   : in  std_logic;
+15.			ack     : in  std_logic;
+16.			request : in  std_logic_vector(NUMBER_PROC_BUS downto 0);
+17.			grant   : out std_logic_vector(NUMBER_PROC_BUS downto 0)
+18.		);
+19.	end;
+20.	
+21.	architecture rr_arbiter of rr_arbiter is
+22.		signal grant_q  : std_logic_vector(NUMBER_PROC_BUS downto 0) := (others => '0');
+23.		signal pre_req  : std_logic_vector(NUMBER_PROC_BUS downto 0) := (others => '0');
+24.		signal sel_gnt  : std_logic_vector(NUMBER_PROC_BUS downto 0) := (others => '0');
+25.		signal isol_lsb : std_logic_vector(NUMBER_PROC_BUS downto 0) := (others => '0');
+26.		signal mask_pre : std_logic_vector(NUMBER_PROC_BUS downto 0) := (others => '0');
+27.		signal win      : std_logic_vector(NUMBER_PROC_BUS downto 0) := (others => '0');
+28.	begin
+29.		grant <= grant_q;
+30.		mask_pre <= request and not (std_logic_vector(unsigned(pre_req) - 1) or pre_req); -- Mask off previous winners
+31.		sel_gnt  <= mask_pre and std_logic_vector(unsigned(not(mask_pre)) + 1);           -- Select new winner
+32.		isol_lsb <= request and std_logic_vector(unsigned(not(request)) + 1);             -- Isolate least significant set bit.
+33.		win <= sel_gnt when mask_pre /= (NUMBER_PROC_BUS downto 0 => '0') else isol_lsb;
+34.	
+35.		process (clock, reset)
+36.		begin
+37.		if reset = '1' then
+38.			pre_req <= (others => '0');
+39.			grant_q <= (others => '0');
+40.		elsif clock'event and clock='1' then
+41.			grant_q <= grant_q;
+42.			pre_req <= pre_req;
+43.			if grant_q = (NUMBER_PROC_BUS downto 0 => '0') or ack = '1' then
+44.				if win /= (NUMBER_PROC_BUS downto 0 => '0') then
+45.					pre_req <= win;
+46.				end if;
+47.				grant_q <= win;
+48.			end if;
+49.		end if;
+50.		end process;
+51.	
+52.	end rr_arbiter;

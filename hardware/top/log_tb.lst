@@ -1,0 +1,125 @@
+1.	library IEEE;
+2.	use ieee.std_logic_1164.all;
+3.	use ieee.std_logic_arith.all;
+4.	use ieee.std_logic_unsigned.all;
+5.	use std.textio.all;
+6.	use work.memory_pack.all;
+7.	use work.HeMPS_PKG.all;
+8.	
+9.	
+10.	
+11.	entity log_tb is port(
+12.	    reset     : in    std_logic;
+13.	    control_data_out_debug : in std_logic_vector(31 downto 0);
+14.	    control_write_enable_debug : in std_logic;
+15.	    busy_debug : out std_logic;
+16.	    ack_app   : in std_logic;
+17.	    req_app   : out std_logic_vector(31 downto 0)
+18.	    
+19.	  );
+20.	end;
+21.	architecture log_tb of log_tb is
+22.	   type state is (LER, WAIT_DDR, WR_HEMPS, START);
+23.	        signal EA : state;
+24.	        
+25.	        type state2 is (S0, S1);
+26.	        signal CS: state2;
+27.	        
+28.	        signal counter  : integer :=0;
+29.	        constant  log_file : string := "log/output_master.txt"; --! port                 
+30.	
+31.	begin
+32.	
+33.	
+34.	        
+35.	
+36.	
+37.	  process
+38.	              variable j : integer := 0;
+39.	        begin
+40.	                if reset = '1' then
+41.	                        req_app <= (others=>'0');
+42.	                        j:=0;
+43.	                else
+44.	                        loop1: while j<NUMBER_OF_APPS loop
+45.	                                wait for appstime(j);
+46.	                                req_app <= CONV_STD_LOGIC_VECTOR(j, 32) or x"80000000";
+47.	                                wait until ack_app'event and ack_app= '1';
+48.	                                req_app <= (others=>'0');
+49.	                                wait until ack_app'event and ack_app= '0';
+50.	                                j:= j + 1;
+51.	                        end loop loop1;
+52.	                        wait;
+53.	                end if;
+54.	        end process;
+55.	        
+56.	     --
+57.	     -- creates the output file 
+58.	     --
+59.	     process(control_write_enable_debug,reset)
+60.	       file store_file : text open write_mode is log_file;
+61.	       variable file_line : line;
+62.	       variable line_type: character;
+63.	       variable line_length : natural := 0;
+64.	       variable str: string (1 to 4);
+65.	       variable str_end: boolean;
+66.	     begin
+67.	        if reset = '1' then
+68.	                str_end := false;
+69.	                CS <= S0;      
+70.	        elsif rising_edge(control_write_enable_debug) then
+71.	                case CS is
+72.	                  when S0 =>
+73.	                          -- Reads the incoming string
+74.	                          line_type := character'val(conv_integer(control_data_out_debug(7 downto 0)));
+75.	                          
+76.	                          -- Verifies if the string is from Echo()
+77.	                          if line_type = '$' then 
+78.	                                  write(file_line, line_type);
+79.	                                  line_length := line_length + 1;
+80.	                                  CS <= S1;
+81.	                          
+82.	                          -- Writes the string to the file
+83.	                          else                                                                    
+84.	                                  str(4) := character'val(conv_integer(control_data_out_debug(7 downto 0)));
+85.	                                  str(3) := character'val(conv_integer(control_data_out_debug(15 downto 8)));
+86.	                                  str(2) := character'val(conv_integer(control_data_out_debug(23 downto 16)));
+87.	                                  str(1) := character'val(conv_integer(control_data_out_debug(31 downto 24)));
+88.	                                  
+89.	                                  str_end := false;
+90.	                                  
+91.	                                  for i in 1 to 4 loop                                                            
+92.	                                          -- Writes a string in the line
+93.	                                          if str(i) /= lf and str(i) /= nul and not str_end then
+94.	                                                  write(file_line, str(i));
+95.	                                                  line_length := line_length + 1;
+96.	                                  
+97.	                                          -- Detects the string end
+98.	                                          elsif str(i) = nul then
+99.	                                                  str_end := true;
+100.	                                          
+101.	                                          -- Line feed detected. Writes the line in the file
+102.	                                          elsif str(i) = lf then                                                              
+103.	                                                  writeline(store_file, file_line);
+104.	                                                  line_length := 0;
+105.	                                          end if;
+106.	                                  end loop;
+107.	                          end if;
+108.	                                                                  
+109.	                  -- Receives from plasma the source processor, source task and writes them to the file
+110.	                  when S1 =>
+111.	                          write(file_line, ',');
+112.	                          write(file_line, conv_integer(control_data_out_debug(7 downto 0)));                                                             
+113.	                          line_length := line_length + 1;
+114.	                          
+115.	                          if line_length = 3 then 
+116.	                                  write(file_line, ',');
+117.	                                  CS <= S0;
+118.	                          else
+119.	                                  CS <= S1;
+120.	                          end if;
+121.	               end case;
+122.	        end if;
+123.	      end process;
+124.	
+125.	end;

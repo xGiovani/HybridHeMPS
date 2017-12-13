@@ -1,0 +1,106 @@
+1.	library ieee;
+2.	use work.HeMPS_defaults.all;
+3.	use ieee.std_logic_1164.all;
+4.	
+5.	entity PE_injector is
+6.		generic(
+7.			source_address          : std_logic_vector(15 downto 0):= (others=>'0');
+8.			target_address		: std_logic_vector(15 downto 0):= (others=>'0'));
+9.		port(
+10.			clock                   : in  std_logic;
+11.			reset                   : in  std_logic;
+12.			-- Router Local port Connection
+13.			clock_tx                : out std_logic;
+14.			tx                      : out std_logic;
+15.			data_out                : out regflit;
+16.			credit_i                : in std_logic;
+17.			clock_rx                : in std_logic;
+18.			rx			: in std_logic;
+19.			data_in			: in regflit;
+20.			credit_o		: out std_logic);
+21.	end PE_injector;
+22.	
+23.	architecture PE_injector of PE_injector is
+24.		signal header_inj, service_inj: regflit;
+25.		type Estado IS (SendHeader, SendService, SendPayload, SWait, SendSize, SCredit); -- Tipo Enumerado para -- definir os Estados
+26.		signal S, S_ant : Estado;
+27.		signal inj_clk	   : std_logic;
+28.	begin
+29.	
+30.		clock_tx <= clock;
+31.	
+32.		credit_o <= '1';
+33.	
+34.		Flit_Inj:process(clock, reset)
+35.		variable countPL: integer range 0 to 500;
+36.		begin
+37.			if reset = '1' then
+38.				countPL := 0;
+39.				S <= SWait;
+40.				S_ant <= Swait;
+41.				tx <= '0';
+42.				data_out <= x"00000000";
+43.			elsif rising_edge(clock) then
+44.				if credit_i = '0' and S /= SCredit then
+45.					S_ant <= S;
+46.					S <= SCredit; 
+47.				else
+48.					case S is
+49.					when SendHeader =>
+50.						data_out <= header_inj;
+51.						tx <= '1';
+52.						S <= SendSize;
+53.					when SendService =>				
+54.						data_out <= service_inj;
+55.						tx <= '1';
+56.						S <= SendPayload;
+57.					when SendSize =>
+58.						data_out <= x"00000100";
+59.						tx <= '1';
+60.						S <= SendService;
+61.					when SendPayload =>
+62.						data_out <= x"01020304";
+63.						tx <= '1';
+64.						countPL := countPL+1;
+65.						if countPL = 255 then
+66.							countPL := 0;
+67.							S <= SWait;
+68.						end if;
+69.					when SWait =>
+70.						countPL := 0;
+71.						tx <= '0';
+72.						if inj_clk = '1' then
+73.							S <= SendHeader;
+74.						end if;
+75.					when SCredit =>
+76.						tx <= '0';
+77.						if credit_i = '1' and inj_clk = '1' then
+78.							S <= S_ant;
+79.						end if;
+80.					end case;
+81.				end if;
+82.			end if;
+83.		end process Flit_Inj;
+84.	
+85.		service_inj <= x"FFFF" & source_address;
+86.		header_inj <= x"0000" & target_address;
+87.			
+88.		Count:process(clock, reset)
+89.		variable count: integer range 0 to 100000;
+90.		begin
+91.			if reset = '1' then
+92.				count := 0;
+93.			end if;
+94.			if rising_edge(clock) then
+95.				if count /= 90 then  
+96.					count := count +1;
+97.					inj_clk <= '0';
+98.				else
+99.					inj_clk <= '1';
+100.					count := 0;
+101.				end if;
+102.			
+103.			end if;
+104.		end process Count;
+105.		
+106.	end architecture PE_injector;

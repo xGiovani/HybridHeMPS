@@ -1,0 +1,219 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  Hermes_switchcontrol.vhd
+10.	--
+11.	--  Brief description: Description of the states of the NoC, and executions for each state.
+12.	--
+13.	---------------------------------------------------------------------------------------
+14.	
+15.	library IEEE;
+16.	use IEEE.STD_LOGIC_1164.all;
+17.	use IEEE.STD_LOGIC_unsigned.all;
+18.	use work.HeMPS_defaults.all;
+19.	use work.HemPS_PKG.all;
+20.	
+21.	entity SwitchControl is
+22.	port(
+23.	        clock :   in  std_logic;
+24.	        reset :   in  std_logic;
+25.	        h :       in  regNport;
+26.	        ack_h :   out regNport;
+27.	        address : in  regmetadeflit;
+28.	        data :    in  arrayNport_regflit;
+29.	        sender :  in  regNport;
+30.	        free :    out regNport;
+31.	        mux_in :  out arrayNport_reg3;
+32.	        mux_out : out arrayNport_reg3);
+33.	end SwitchControl;
+34.	
+35.	architecture XY of SwitchControl is
+36.	
+37.	type state is (S0,S1,S2,S3,S4,S5,S6,S7);
+38.	signal ES, PES: state;
+39.	
+40.	-- sinais do arbitro
+41.	signal ask: std_logic := '0';
+42.	signal sel,prox: integer range 0 to (NPORT-1) := 0;
+43.	signal incoming: reg3 := (others=> '0');
+44.	signal header : regflit := (others=> '0');
+45.	
+46.	-- sinais do controle
+47.	signal dirx,diry: integer range 0 to (NPORT-1) := 0;
+48.	signal lx,ly,tx,ty: regquartoflit := (others=> '0');
+49.	signal auxfree: regNport := (others=> '0');
+50.	signal source:  arrayNport_reg3 := (others=> (others=> '0'));
+51.	signal sender_ant: regNport := (others=> '0');
+52.	
+53.	begin
+54.	
+55.	        ask <= '1' when h(LOCAL)='1' or h(EAST)='1' or h(WEST)='1' or h(NORTH)='1' or h(SOUTH)='1' else '0';
+56.	        incoming <= CONV_VECTOR(sel);
+57.	        header <= data(CONV_INTEGER(incoming));
+58.	
+59.	        process(sel,h)
+60.	        begin
+61.	                case sel is
+62.	                        when LOCAL=>
+63.	                                if h(EAST)='1' then prox<=EAST;
+64.	                                elsif h(WEST)='1' then  prox<=WEST;
+65.	                                elsif h(NORTH)='1' then prox<=NORTH;
+66.	                                elsif h(SOUTH)='1' then prox<=SOUTH;
+67.	                                else prox<=LOCAL; end if;
+68.	                        when EAST=>
+69.	                                if h(WEST)='1' then prox<=WEST;
+70.	                                elsif h(NORTH)='1' then prox<=NORTH;
+71.	                                elsif h(SOUTH)='1' then prox<=SOUTH;
+72.	                                elsif h(LOCAL)='1' then prox<=LOCAL;
+73.	                                else prox<=EAST; end if;
+74.	                        when WEST=>
+75.	                                if h(NORTH)='1' then prox<=NORTH;
+76.	                                elsif h(SOUTH)='1' then prox<=SOUTH;
+77.	                                elsif h(LOCAL)='1' then prox<=LOCAL;
+78.	                                elsif h(EAST)='1' then prox<=EAST;
+79.	                                else prox<=WEST; end if;
+80.	                        when NORTH=>
+81.	                                if h(SOUTH)='1' then prox<=SOUTH;
+82.	                                elsif h(LOCAL)='1' then prox<=LOCAL;
+83.	                                elsif h(EAST)='1' then prox<=EAST;
+84.	                                elsif h(WEST)='1' then prox<=WEST;
+85.	                                else prox<=NORTH; end if;
+86.	                        when SOUTH=>
+87.	                                if h(LOCAL)='1' then prox<=LOCAL;
+88.	                                elsif h(EAST)='1' then prox<=EAST;
+89.	                                elsif h(WEST)='1' then prox<=WEST;
+90.	                                elsif h(NORTH)='1' then prox<=NORTH;
+91.	                                else prox<=SOUTH; end if;
+92.	                end case;
+93.	        end process;
+94.	
+95.	
+96.	        lx <= address((METADEFLIT - 1) downto QUARTOFLIT);
+97.	        ly <= address((QUARTOFLIT - 1) downto 0);
+98.	
+99.	        tx <= header((METADEFLIT - 1) downto QUARTOFLIT);
+100.	        ty <= header((QUARTOFLIT - 1) downto 0);
+101.	
+102.	        dirx <= WEST when lx > tx else EAST;
+103.	        diry <= NORTH when ly < ty else SOUTH;
+104.	
+105.	        process(reset,clock)
+106.	        begin
+107.	                if reset='1' then
+108.	                        ES<=S0;
+109.	                elsif clock'event and clock='0' then
+110.	                        ES<=PES;
+111.	                end if;
+112.	        end process;
+113.	
+114.	        ------------------------------------------------------------------------------------------------------
+115.	        -- PARTE COMBINACIONAL PARA DEFINIR O PRÓXIMO ESTADO DA MÁQUINA.
+116.	        --
+117.	        -- SO -> O estado S0 é o estado de inicialização da máquina. Este estado somente é
+118.	        --       atingido quando o sinal reset é ativado.
+119.	        -- S1 -> O estado S1 é o estado de espera por requisição de chaveamento. Quando o
+120.	        --       árbitro recebe uma ou mais requisições o sinal ask é ativado fazendo a
+121.	        --       máquina avançar para o estado S2.
+122.	        -- S2 -> No estado S2 a porta de entrada que solicitou chaveamento é selecionada. Se
+123.	        --       houver mais de uma, aquela com maior prioridade é a selecionada.
+124.	        -- S3 -> No estado S3 é realizado algoritmo de chaveamento XY. O algoritmo de chaveamento
+125.	        --       XY faz a comparação do endereço da chave atual com o endereço da chave destino do
+126.	        --       pacote (armazenado no primeiro flit do pacote). O pacote deve ser chaveado para a
+127.	        --       porta Local da chave quando o endereço xLyL* da chave atual for igual ao endereço
+128.	        --       xTyT* da chave destino do pacote. Caso contrário, é realizada, primeiramente, a
+129.	        --       comparação horizontal de endereços. A comparação horizontal determina se o pacote
+130.	        --       deve ser chaveado para o Leste (xL<xT), para o Oeste (xL>xT), ou se o mesmo já
+131.	        --       está horizontalmente alinhado à chave destino (xL=xT). Caso esta última condição
+132.	        --       seja verdadeira é realizada a comparação vertical que determina se o pacote deve
+133.	        --       ser chaveado para o Sul (yL<yT) ou para o Norte (yL>yT). Caso a porta vertical
+134.	        --       escolhida esteja ocupada, é realizado o bloqueio dos flits do pacote até que o
+135.	        --       pacote possa ser chaveado.
+136.	        -- S4, S5 e S6 -> Nestes estados é estabelecida a conexão da porta de entrada com a de
+137.	        --       de saída através do preenchimento dos sinais mux_in e mux_out.
+138.	        -- S7 -> O estado S7 é necessário para que a porta selecionada para roteamento baixe o sinal
+139.	        --       h.
+140.	        --
+141.	        process(ES,ask,h,lx,ly,tx,ty,auxfree,dirx,diry)
+142.	        begin
+143.	                case ES is
+144.	                        when S0 => PES <= S1;
+145.	                        when S1 => if ask='1' then PES <= S2; else PES <= S1; end if;
+146.	                        when S2 => PES <= S3;
+147.	                        when S3 => if lx = tx and ly = ty and auxfree(LOCAL)='1' then PES<=S4;
+148.	                                        elsif lx /= tx and auxfree(dirx)='1' then PES<=S5;
+149.	                                        elsif lx = tx and ly /= ty and auxfree(diry)='1' then PES<=S6;
+150.	                                        else PES<=S1; end if;
+151.	                        when S4 => PES<=S7;
+152.	                        when S5 => PES<=S7;
+153.	                        when S6 => PES<=S7;
+154.	                        when S7 => PES<=S1;
+155.	                end case;
+156.	        end process;
+157.	
+158.	        ------------------------------------------------------------------------------------------------------
+159.	        -- executa as ações correspondente ao estado atual da máquina de estados
+160.	        ------------------------------------------------------------------------------------------------------
+161.	        process (clock)
+162.	        begin
+163.	                if clock'event and clock='1' then
+164.	                        case ES is
+165.	                                -- Zera variáveis
+166.	                                when S0 =>
+167.	                                        sel <= 0;
+168.	                                        ack_h <= (others => '0');
+169.	                                        auxfree <= (others=> '1');
+170.	                                        sender_ant <= (others=> '0');
+171.	                                        mux_out <= (others=>(others=>'0'));
+172.	                                        source <= (others=>(others=>'0'));
+173.	                                -- Chegou um header
+174.	                                when S1=>
+175.	                                        ack_h <= (others => '0');
+176.	                                -- Seleciona quem tera direito a requisitar roteamento
+177.	                                when S2=>
+178.	                                        sel <= prox;
+179.	                                -- Estabelece a conexão com a porta LOCAL
+180.	                                when S4 =>
+181.	                                        source(CONV_INTEGER(incoming)) <= CONV_VECTOR(LOCAL);
+182.	                                        mux_out(LOCAL) <= incoming;
+183.	                                        auxfree(LOCAL) <= '0';
+184.	                                        ack_h(sel)<='1';
+185.	                                -- Estabelece a conexão com a porta EAST ou WEST
+186.	                                when S5 =>
+187.	                                        source(CONV_INTEGER(incoming)) <= CONV_VECTOR(dirx);
+188.	                                        mux_out(dirx) <= incoming;
+189.	                                        auxfree(dirx) <= '0';
+190.	                                        ack_h(sel)<='1';
+191.	                                -- Estabelece a conexão com a porta NORTH ou SOUTH
+192.	                                when S6 =>
+193.	                                        source(CONV_INTEGER(incoming)) <= CONV_VECTOR(diry);
+194.	                                        mux_out(diry) <= incoming;
+195.	                                        auxfree(diry) <= '0';
+196.	                                        ack_h(sel)<='1';
+197.	                                when others => ack_h(sel)<='0';
+198.	                        end case;
+199.	
+200.	                        sender_ant(LOCAL) <= sender(LOCAL);
+201.	                        sender_ant(EAST)  <= sender(EAST);
+202.	                        sender_ant(WEST)  <= sender(WEST);
+203.	                        sender_ant(NORTH) <= sender(NORTH);
+204.	                        sender_ant(SOUTH) <= sender(SOUTH);
+205.	
+206.	                        if sender(LOCAL)='0' and  sender_ant(LOCAL)='1' then auxfree(CONV_INTEGER(source(LOCAL))) <='1'; end if;
+207.	                        if sender(EAST) ='0' and  sender_ant(EAST)='1'  then auxfree(CONV_INTEGER(source(EAST)))  <='1'; end if;
+208.	                        if sender(WEST) ='0' and  sender_ant(WEST)='1'  then auxfree(CONV_INTEGER(source(WEST)))  <='1'; end if;
+209.	                        if sender(NORTH)='0' and  sender_ant(NORTH)='1' then auxfree(CONV_INTEGER(source(NORTH))) <='1'; end if;
+210.	                        if sender(SOUTH)='0' and  sender_ant(SOUTH)='1' then auxfree(CONV_INTEGER(source(SOUTH))) <='1'; end if;
+211.	
+212.	                end if;
+213.	        end process;
+214.	
+215.	
+216.	        mux_in <= source;
+217.	        free <= auxfree;
+218.	
+219.	end XY;

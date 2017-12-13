@@ -1,0 +1,40 @@
+1.	---------------------------------------------
+2.	-- Implementation of Daisy Chain Arbiter
+3.	---------------------------------------------
+4.	library ieee;
+5.	use ieee.std_logic_1164.all;
+6.	use work.HeMPS_defaults.all;
+7.	
+8.	entity daisy_chain is
+9.		port(	  
+10.		    request   : in std_logic_vector(NUMBER_PE_BUS-1 downto 0);
+		                                                |
+ncvhdl_p: *E,IDENTU (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_DC/daisy_chain_hy.vhd,10|49): identifier (NUMBER_PE_BUS) is not declared [10.3].
+11.		    grant     : out std_logic;
+12.		    using_bus : in std_logic_vector(NUMBER_PE_BUS-1 downto 0)
+		                                                |
+ncvhdl_p: *E,IDENTU (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_DC/daisy_chain_hy.vhd,12|49): identifier (NUMBER_PE_BUS) is not declared [10.3].
+13.		);
+14.	end entity daisy_chain;
+15.	
+16.	architecture arbiter of daisy_chain is
+17.	begin
+18.		-- Grant Signal <= '1' when someone requested the bus and the same is not been used
+19.		process(request, using_bus)
+20.		begin
+21.			if request /= (NUMBER_PE_BUS-1 downto 0 => '0') and using_bus = (NUMBER_PE_BUS-1 downto 0 => '0') then 
+			                           |
+ncvhdl_p: *E,IDENTU (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_DC/daisy_chain_hy.vhd,21|29): identifier (NUMBER_PE_BUS) is not declared [10.3].
+			                                      |
+ncvhdl_p: *E,AGDREX (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_DC/daisy_chain_hy.vhd,21|40): expecting discrete range of type INTEGER [7.3.2].
+			                                                                             |
+ncvhdl_p: *E,IDENTU (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_DC/daisy_chain_hy.vhd,21|79): identifier (NUMBER_PE_BUS) is not declared [10.3].
+			                                                                                        |
+ncvhdl_p: *E,AGDREX (/home/elc1101/giovani/srcs/7.2/hardware/bus/bus_DC/daisy_chain_hy.vhd,21|90): expecting discrete range of type INTEGER [7.3.2].
+22.				grant <= '1';
+23.			else 
+24.				grant <= '0';
+25.			end if;
+26.		end process;
+27.	  
+28.	end architecture arbiter;

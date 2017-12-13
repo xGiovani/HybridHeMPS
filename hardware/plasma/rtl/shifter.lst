@@ -1,0 +1,75 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  shifter.vhd
+10.	--
+11.	--  AUTHOR: Steve Rhoads (rhoadss@yahoo.com)
+12.	--          Matthias Gruenewald
+13.	--
+14.	--  DATE CREATED: 2/2/01
+15.	--
+16.	--  COPYRIGHT: Software placed into the public domain by the author.
+17.	--    Software 'as is' without warranty.  Author liable for nothing.
+18.	--
+19.	--  Brief description:  Implements the 32-bit shifter unit.
+20.	--
+21.	------------------------------------------------------------------------------------------------
+22.	
+23.	library ieee;
+24.	use ieee.std_logic_1164.all;
+25.	use work.mlite_pack.all;
+26.	
+27.	entity shifter is
+28.	   generic(shifter_type : string := "DEF");
+29.	   port(value        : in  std_logic_vector(31 downto 0);
+30.	        shift_amount : in  std_logic_vector(4 downto 0);
+31.	        shift_func   : in  shift_function_type;
+32.	        c_shift      : out std_logic_vector(31 downto 0));
+33.	end; --entity shifter
+34.	
+35.	architecture logic of shifter is
+36.	--   type shift_function_type is (
+37.	--      shift_nothing, shift_left_unsigned, 
+38.	--      shift_right_signed, shift_right_unsigned);
+39.	
+40.	signal shift1L, shift2L, shift4L, shift8L, shift16L : std_logic_vector(31 downto 0);
+41.	signal shift1R, shift2R, shift4R, shift8R, shift16R : std_logic_vector(31 downto 0);
+42.	signal fills : std_logic_vector(31 downto 16);
+43.	
+44.	begin
+45.	   fills <= "1111111111111111" when shift_func = SHIFT_RIGHT_SIGNED 
+46.	                               and value(31) = '1' 
+47.	                               else "0000000000000000";
+48.	   shift1L  <= value(30 downto 0) & '0' when shift_amount(0) = '1' else value;
+49.	   shift2L  <= shift1L(29 downto 0) & "00" when shift_amount(1) = '1' else shift1L;
+50.	   shift4L  <= shift2L(27 downto 0) & "0000" when shift_amount(2) = '1' else shift2L;
+51.	   shift8L  <= shift4L(23 downto 0) & "00000000" when shift_amount(3) = '1' else shift4L;
+52.	   shift16L <= shift8L(15 downto 0) & ZERO(15 downto 0) when shift_amount(4) = '1' else shift8L;
+53.	
+54.	   shift1R  <= fills(31) & value(31 downto 1) when shift_amount(0) = '1' else value;
+55.	   shift2R  <= fills(31 downto 30) & shift1R(31 downto 2) when shift_amount(1) = '1' else shift1R;
+56.	   shift4R  <= fills(31 downto 28) & shift2R(31 downto 4) when shift_amount(2) = '1' else shift2R;
+57.	   shift8R  <= fills(31 downto 24) & shift4R(31 downto 8)  when shift_amount(3) = '1' else shift4R;
+58.	   shift16R <= fills(31 downto 16) & shift8R(31 downto 16) when shift_amount(4) = '1' else shift8R;
+59.	
+60.	GENERIC_SHIFTER: if shifter_type = "DEF" generate
+61.	   c_shift <= shift16L when shift_func = SHIFT_LEFT_UNSIGNED else 
+62.	              shift16R when shift_func = SHIFT_RIGHT_UNSIGNED or 
+63.	                            shift_func = SHIFT_RIGHT_SIGNED else
+64.	              ZERO;
+65.	end generate;
+66.	                 
+67.	AREA_OPTIMIZED_SHIFTER: if shifter_type = "OPT" generate
+68.	   c_shift <= shift16L when shift_func = SHIFT_LEFT_UNSIGNED else (others => 'Z');
+69.	   c_shift <= shift16R when shift_func = SHIFT_RIGHT_UNSIGNED or 
+70.	                            shift_func = SHIFT_RIGHT_SIGNED else (others => 'Z');
+71.	   c_shift <= ZERO     when shift_func = SHIFT_NOTHING else (others => 'Z');
+72.	end generate;
+73.	
+74.	end; --architecture logic
+75.	

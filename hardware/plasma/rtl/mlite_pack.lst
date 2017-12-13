@@ -1,0 +1,342 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  mlite_pack.vhd
+10.	--
+11.	--  AUTHOR: Steve Rhoads (rhoadss@yahoo.com)
+12.	--
+13.	--  DATE CREATED: 2/15/01
+14.	--
+15.	--  COPYRIGHT: Software placed into the public domain by the author.
+16.	--    Software 'as is' without warranty.  Author liable for nothing.
+17.	--
+18.	--  Brief description:  Data types, constants, and add functions needed for the Plasma CPU.
+19.	--
+20.	------------------------------------------------------------------------------------------------
+21.	
+22.	library ieee;
+23.	use ieee.std_logic_1164.all;
+24.	use work.HeMPS_PKG.all;
+25.	
+26.	package mlite_pack is
+27.	   constant ZERO          : std_logic_vector(31 downto 0) :=
+28.	      "00000000000000000000000000000000";
+29.	   constant ONES          : std_logic_vector(31 downto 0) :=
+30.	      "11111111111111111111111111111111";
+31.	   --make HIGH_Z equal to ZERO if compiler complains
+32.	   constant HIGH_Z        : std_logic_vector(31 downto 0) :=
+33.	      "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ";
+34.	  
+35.	   subtype alu_function_type is std_logic_vector(3 downto 0);
+36.	   constant ALU_NOTHING   : alu_function_type := "0000";
+37.	   constant ALU_ADD       : alu_function_type := "0001";
+38.	   constant ALU_SUBTRACT  : alu_function_type := "0010";
+39.	   constant ALU_LESS_THAN : alu_function_type := "0011";
+40.	   constant ALU_LESS_THAN_SIGNED : alu_function_type := "0100";
+41.	   constant ALU_OR        : alu_function_type := "0101";
+42.	   constant ALU_AND       : alu_function_type := "0110";
+43.	   constant ALU_XOR       : alu_function_type := "0111";
+44.	   constant ALU_NOR       : alu_function_type := "1000";
+45.	
+46.	   subtype shift_function_type is std_logic_vector(1 downto 0);
+47.	   constant SHIFT_NOTHING        : shift_function_type := "00";
+48.	   constant SHIFT_LEFT_UNSIGNED  : shift_function_type := "01";
+49.	   constant SHIFT_RIGHT_SIGNED   : shift_function_type := "11";
+50.	   constant SHIFT_RIGHT_UNSIGNED : shift_function_type := "10";
+51.	
+52.	   subtype mult_function_type is std_logic_vector(3 downto 0);
+53.	   constant MULT_NOTHING       : mult_function_type := "0000";
+54.	   constant MULT_READ_LO       : mult_function_type := "0001";
+55.	   constant MULT_READ_HI       : mult_function_type := "0010";
+56.	   constant MULT_WRITE_LO      : mult_function_type := "0011";
+57.	   constant MULT_WRITE_HI      : mult_function_type := "0100";
+58.	   constant MULT_MULT          : mult_function_type := "0101";
+59.	   constant MULT_SIGNED_MULT   : mult_function_type := "0110";
+60.	   constant MULT_DIVIDE        : mult_function_type := "0111";
+61.	   constant MULT_SIGNED_DIVIDE : mult_function_type := "1000";
+62.	
+63.	   subtype a_source_type is std_logic_vector(1 downto 0);
+64.	   constant A_FROM_REG_SOURCE : a_source_type := "00";
+65.	   constant A_FROM_IMM10_6    : a_source_type := "01";
+66.	   constant A_FROM_PC         : a_source_type := "10";
+67.	
+68.	   subtype b_source_type is std_logic_vector(1 downto 0);
+69.	   constant B_FROM_REG_TARGET : b_source_type := "00";
+70.	   constant B_FROM_IMM        : b_source_type := "01";
+71.	   constant B_FROM_SIGNED_IMM : b_source_type := "10";
+72.	   constant B_FROM_IMMX4      : b_source_type := "11";
+73.	
+74.	   subtype c_source_type is std_logic_vector(2 downto 0);
+75.	   constant C_FROM_NULL       : c_source_type := "000";
+76.	   constant C_FROM_ALU        : c_source_type := "001";
+77.	   constant C_FROM_SHIFT      : c_source_type := "001"; --same as alu
+78.	   constant C_FROM_MULT       : c_source_type := "001"; --same as alu
+79.	   constant C_FROM_MEMORY     : c_source_type := "010";
+80.	   constant C_FROM_PC         : c_source_type := "011";
+81.	   constant C_FROM_PC_PLUS4   : c_source_type := "100";
+82.	   constant C_FROM_IMM_SHIFT16: c_source_type := "101";
+83.	   constant C_FROM_REG_SOURCEN: c_source_type := "110";
+84.	   constant C_FROM_PC_PAST    : c_source_type := "111"; -- fixes interrupting jumps
+85.	
+86.	   subtype pc_source_type is std_logic_vector(1 downto 0);
+87.	   constant FROM_INC4       : pc_source_type := "00";
+88.	   constant FROM_OPCODE25_0 : pc_source_type := "01";
+89.	   constant FROM_BRANCH     : pc_source_type := "10";
+90.	   constant FROM_LBRANCH    : pc_source_type := "11";
+91.	
+92.	   subtype branch_function_type is std_logic_vector(2 downto 0);
+93.	   constant BRANCH_LTZ : branch_function_type := "000";
+94.	   constant BRANCH_LEZ : branch_function_type := "001";
+95.	   constant BRANCH_EQ  : branch_function_type := "010";
+96.	   constant BRANCH_NE  : branch_function_type := "011";
+97.	   constant BRANCH_GEZ : branch_function_type := "100";
+98.	   constant BRANCH_GTZ : branch_function_type := "101";
+99.	   constant BRANCH_YES : branch_function_type := "110";
+100.	   constant BRANCH_NO  : branch_function_type := "111";
+101.	
+102.	   -- mode(32=1,16=2,8=3), signed, write
+103.	   subtype mem_source_type is std_logic_vector(3 downto 0);
+104.	   constant MEM_FETCH   : mem_source_type := "0000";
+105.	   constant MEM_READ32  : mem_source_type := "0100";
+106.	   constant MEM_WRITE32 : mem_source_type := "0101";
+107.	   constant MEM_READ16  : mem_source_type := "1000";
+108.	   constant MEM_READ16S : mem_source_type := "1010";
+109.	   constant MEM_WRITE16 : mem_source_type := "1001";
+110.	   constant MEM_READ8   : mem_source_type := "1100";
+111.	   constant MEM_READ8S  : mem_source_type := "1110";
+112.	   constant MEM_WRITE8  : mem_source_type := "1101";
+113.	
+114.	   function bv_adder(a     : in std_logic_vector;
+115.	                     b     : in std_logic_vector;
+116.	                     do_add: in std_logic) return std_logic_vector;
+117.	   function bv_negate(a : in std_logic_vector) return std_logic_vector;
+118.	   function bv_increment(a : in std_logic_vector(31 downto 2)
+119.	                         ) return std_logic_vector;
+120.	   function bv_inc(a : in std_logic_vector
+121.	                  ) return std_logic_vector;
+122.	     
+123.	   component pc_next
+124.	      port(clk         : in std_logic;
+125.	           reset_in    : in std_logic;
+126.	           pc_new      : in std_logic_vector(31 downto 2);
+127.	           take_branch : in std_logic;
+128.	           pause_in    : in std_logic;
+129.	           opcode25_0  : in std_logic_vector(25 downto 0);
+130.	           pc_source   : in pc_source_type;
+131.	           pc_future   : out std_logic_vector(31 downto 2);
+132.	           pc_current  : out std_logic_vector(31 downto 2);
+133.	         pc_past     : out std_logic_vector(31 downto 2);
+134.	           pc_plus4    : out std_logic_vector(31 downto 2));
+135.	   end component;
+136.	
+137.	   component mem_ctrl
+138.	      port(clk          : in std_logic;
+139.	           reset_in     : in std_logic;
+140.	           pause_in     : in std_logic;
+141.	           nullify_op   : in std_logic;
+142.	           address_pc   : in std_logic_vector(31 downto 2);
+143.	           opcode_out   : out std_logic_vector(31 downto 0);
+144.	
+145.	           address_in   : in std_logic_vector(31 downto 0);
+146.	           mem_source   : in mem_source_type;
+147.	           data_write   : in std_logic_vector(31 downto 0);
+148.	           data_read    : out std_logic_vector(31 downto 0);
+149.	           pause_out    : out std_logic;
+150.	        
+151.	           mem_address  : out std_logic_vector(31 downto 2);
+152.	           mem_data_w   : out std_logic_vector(31 downto 0);
+153.	           mem_data_r   : in std_logic_vector(31 downto 0);
+154.	           mem_byte_we  : out std_logic_vector(3 downto 0));
+155.	   end component;
+156.	
+157.	   component control 
+158.	      port(opcode       : in  std_logic_vector(31 downto 0);
+159.	           intr_signal  : in  std_logic;
+160.	           rs_index     : out std_logic_vector(5 downto 0);
+161.	           rt_index     : out std_logic_vector(5 downto 0);
+162.	           rd_index     : out std_logic_vector(5 downto 0);
+163.	           imm_out      : out std_logic_vector(15 downto 0);
+164.	           alu_func     : out alu_function_type;
+165.	           shift_func   : out shift_function_type;
+166.	           mult_func    : out mult_function_type;
+167.	           branch_func  : out branch_function_type;
+168.	           a_source_out : out a_source_type;
+169.	           b_source_out : out b_source_type;
+170.	           c_source_out : out c_source_type;
+171.	           pc_source_out: out pc_source_type;
+172.	           mem_source_out:out mem_source_type);
+173.	   end component;
+174.	
+175.	   component reg_bank
+176.	      generic(memory_type : string := "XIL");
+177.	      port(clk            : in  std_logic;
+178.	           reset_in       : in  std_logic;
+179.	           pause          : in  std_logic;
+180.	           rs_index       : in  std_logic_vector(5 downto 0);
+181.	           rt_index       : in  std_logic_vector(5 downto 0);
+182.	           rd_index       : in  std_logic_vector(5 downto 0);
+183.	           reg_source_out : out std_logic_vector(31 downto 0);
+184.	           reg_target_out : out std_logic_vector(31 downto 0);
+185.	           reg_dest_new   : in  std_logic_vector(31 downto 0);
+186.	         page           : out std_logic_vector(31 downto 0); -- CRIS
+187.	           intr_enable    : out std_logic);
+188.	   end component;
+189.	
+190.	   component bus_mux 
+191.	      port(imm_in       : in  std_logic_vector(15 downto 0);
+192.	           reg_source   : in  std_logic_vector(31 downto 0);
+193.	           a_mux        : in  a_source_type;
+194.	           a_out        : out std_logic_vector(31 downto 0);
+195.	
+196.	           reg_target   : in  std_logic_vector(31 downto 0);
+197.	           b_mux        : in  b_source_type;
+198.	           b_out        : out std_logic_vector(31 downto 0);
+199.	
+200.	           c_bus        : in  std_logic_vector(31 downto 0);
+201.	           c_memory     : in  std_logic_vector(31 downto 0);
+202.	           c_pc         : in  std_logic_vector(31 downto 2);
+203.	           c_pc_past    : in  std_logic_vector(31 downto 2);
+204.	           c_pc_plus4   : in  std_logic_vector(31 downto 2);
+205.	           c_mux        : in  c_source_type;
+206.	           reg_dest_out : out std_logic_vector(31 downto 0);
+207.	
+208.	           branch_func  : in  branch_function_type;
+209.	           take_branch  : out std_logic);
+210.	   end component;
+211.	
+212.	   component alu
+213.	      generic(alu_type  : string := "DEF");
+214.	      port(a_in         : in  std_logic_vector(31 downto 0);
+215.	           b_in         : in  std_logic_vector(31 downto 0);
+216.	           alu_function : in  alu_function_type;
+217.	           c_alu        : out std_logic_vector(31 downto 0));
+218.	   end component;
+219.	
+220.	   component shifter
+221.	      generic(shifter_type : string := "DEF" );
+222.	      port(value        : in  std_logic_vector(31 downto 0);
+223.	           shift_amount : in  std_logic_vector(4 downto 0);
+224.	           shift_func   : in  shift_function_type;
+225.	           c_shift      : out std_logic_vector(31 downto 0));
+226.	   end component;
+227.	
+228.	   component mult
+229.	      generic(mult_type  : string := "DEF"); 
+230.	      port(clk       : in  std_logic;
+231.	           reset_in  : in  std_logic;
+232.	           a, b      : in  std_logic_vector(31 downto 0);
+233.	           mult_func : in  mult_function_type;
+234.	           c_mult    : out std_logic_vector(31 downto 0);
+235.	           pause_out : out std_logic); 
+236.	   end component;
+237.	
+238.	   component pipeline
+239.	      port(clk            : in  std_logic;
+240.	           reset          : in  std_logic;
+241.	           a_bus          : in  std_logic_vector(31 downto 0);
+242.	           a_busD         : out std_logic_vector(31 downto 0);
+243.	           b_bus          : in  std_logic_vector(31 downto 0);
+244.	           b_busD         : out std_logic_vector(31 downto 0);
+245.	           alu_func       : in  alu_function_type;
+246.	           alu_funcD      : out alu_function_type;
+247.	           shift_func     : in  shift_function_type;
+248.	           shift_funcD    : out shift_function_type;
+249.	           mult_func      : in  mult_function_type;
+250.	           mult_funcD     : out mult_function_type;
+251.	           reg_dest       : in  std_logic_vector(31 downto 0);
+252.	           reg_destD      : out std_logic_vector(31 downto 0);
+253.	           rd_index       : in  std_logic_vector(5 downto 0);
+254.	           rd_indexD      : out std_logic_vector(5 downto 0);
+255.	
+256.	           rs_index       : in  std_logic_vector(5 downto 0);
+257.	           rt_index       : in  std_logic_vector(5 downto 0);
+258.	           pc_source      : in  pc_source_type;
+259.	           mem_source     : in  mem_source_type;
+260.	           a_source       : in  a_source_type;
+261.	           b_source       : in  b_source_type;
+262.	           c_source       : in  c_source_type;
+263.	           c_bus          : in  std_logic_vector(31 downto 0);
+264.	           pause_any      : in  std_logic;
+265.	           pause_pipeline : out std_logic);
+266.	   end component;
+267.	
+268.	   
+269.	
+270.	end; --package mlite_pack
+271.	
+272.	package body mlite_pack is
+273.	
+274.	function bv_adder(a     : in std_logic_vector;
+275.	                  b     : in std_logic_vector;
+276.	                  do_add: in std_logic) return std_logic_vector is
+277.	   variable carry_in : std_logic;
+278.	   variable bb       : std_logic_vector(a'length-1 downto 0);
+279.	   variable result   : std_logic_vector(a'length downto 0);
+280.	begin
+281.	   if do_add = '1' then
+282.	      bb := b;
+283.	      carry_in := '0';
+284.	   else
+285.	      bb := not b;
+286.	      carry_in := '1';
+287.	   end if;
+288.	   for index in 0 to a'length-1 loop
+289.	      result(index) := a(index) xor bb(index) xor carry_in;
+290.	      carry_in := (carry_in and (a(index) or bb(index))) or
+291.	                  (a(index) and bb(index));
+292.	   end loop;
+293.	   result(a'length) := carry_in xnor do_add;
+294.	   return result;
+295.	end; --function
+296.	
+297.	
+298.	function bv_negate(a : in std_logic_vector) return std_logic_vector is
+299.	   variable carry_in : std_logic;
+300.	   variable not_a    : std_logic_vector(a'length-1 downto 0);
+301.	   variable result   : std_logic_vector(a'length-1 downto 0);
+302.	begin
+303.	   not_a := not a;
+304.	   carry_in := '1';
+305.	   for index in a'reverse_range loop
+306.	      result(index) := not_a(index) xor carry_in;
+307.	      carry_in := carry_in and not_a(index);
+308.	   end loop;
+309.	   return result;
+310.	end; --function
+311.	
+312.	
+313.	function bv_increment(a : in std_logic_vector(31 downto 2)
+314.	                     ) return std_logic_vector is
+315.	   variable carry_in : std_logic;
+316.	   variable result   : std_logic_vector(31 downto 2);
+317.	begin
+318.	   carry_in := '1';
+319.	   for index in 2 to 31 loop
+320.	      result(index) := a(index) xor carry_in;
+321.	      carry_in := a(index) and carry_in;
+322.	   end loop;
+323.	   return result;
+324.	end; --function
+325.	
+326.	
+327.	function bv_inc(a : in std_logic_vector
+328.	                ) return std_logic_vector is
+329.	   variable carry_in : std_logic;
+330.	   variable result   : std_logic_vector(a'length-1 downto 0);
+331.	begin
+332.	   carry_in := '1';
+333.	   for index in 0 to a'length-1 loop
+334.	      result(index) := a(index) xor carry_in;
+335.	      carry_in := a(index) and carry_in;
+336.	   end loop;
+337.	   return result;
+338.	end; --function
+339.	
+340.	end; --package body
+341.	
+342.	

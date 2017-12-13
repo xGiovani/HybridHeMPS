@@ -1,0 +1,116 @@
+1.	---------------------------------------------
+2.	-- Implementation of HeMPS Bus
+3.	---------------------------------------------
+4.	library ieee;
+5.	use ieee.std_logic_1164.all;
+6.	use IEEE.numeric_std.all;
+7.	use work.HeMPS_defaults.all;
+8.	
+9.	entity bus_ctrl is
+10.		port(	 
+11.			-- Input to bus
+12.			tx         : in std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0);
+13.			data_out   : in arrayNregflit;
+14.			credit_o   : in std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0);
+15.			-- Bus Data to processors
+16.			bus_data   : out regflit;
+17.			bus_rx     : out std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0);
+18.			bus_credit : out std_logic;
+19.			-- Control Signals
+20.			using_bus  : in std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0);
+21.			tx_addr    : in arrayNregflit
+22.		);
+23.	end bus_ctrl;
+24.	
+25.	architecture bus_ctrl of bus_ctrl is
+26.		signal source, target: integer range NUMBER_PROCESSORS_BUS-1 downto 0;
+27.		signal target4: integer range 3 downto 0;
+28.	  signal target6: integer range 5 downto 0;
+29.		signal target9: integer range 8 downto 0;
+30.		signal target12: integer range 11 downto 0;
+31.		signal target16: integer range 15 downto 0;
+32.	
+33.	
+34.		signal tmp: UNSIGNED(NUMBER_PROCESSORS_BUS-1 downto 0) := (0 => '1', others=>'0');
+35.	begin
+36.	
+37.		bus_data <= data_out(source);
+38.		bus_credit <= credit_o(target);
+39.	
+40.		-- Source processor
+41.		process(using_bus)
+42.		begin
+43.		for i in 0 to NUMBER_PROCESSORS_BUS-1 loop
+44.			if using_bus(i) = '1' then
+45.				source <= i;
+46.				exit;
+47.			end if;
+48.		end loop;
+49.		end process;
+50.	
+51.		bus_rx <= (others=>'0') when tx = (NUMBER_PROCESSORS_BUS-1 downto 0 => '0') else std_logic_vector(tmp sll target);
+52.		
+53.		target <= target4 when NUMBER_PROCESSORS_BUS = 4 else
+54.	      target6 when NUMBER_PROCESSORS_BUS = 6 else
+55.			  target9 when NUMBER_PROCESSORS_BUS = 9 else
+56.	      target12 when NUMBER_PROCESSORS_BUS = 12 else
+57.			  target16; -- 16
+58.	
+59.	---- TARGETS ---------------------------------------------------
+60.		-- HeMPS 2x2
+61.		target4 <= 0 when tx_addr(source) = x"00000000" else
+62.		 	   1 when tx_addr(source) = x"00000100" else
+63.			   2 when tx_addr(source) = x"00000001" else
+64.			   3; -- x"000000101
+65.	  -- HeMPS 3x2
+66.		target6 <= 0 when tx_addr(source) = x"00000000" else
+67.		     1 when tx_addr(source) = x"00000100" else
+68.			   2 when tx_addr(source) = x"00000200" else
+69.			   3 when tx_addr(source) = x"00000001" else
+70.			   4 when tx_addr(source) = x"00000101" else
+71.			   5 ;
+72.	
+73.		-- HeMPS 3x3
+74.		target9 <= 0 when tx_addr(source) = x"00000000" else
+75.		           1 when tx_addr(source) = x"00000100" else
+76.			   2 when tx_addr(source) = x"00000200" else
+77.			   3 when tx_addr(source) = x"00000001" else
+78.			   4 when tx_addr(source) = x"00000101" else
+79.			   5 when tx_addr(source) = x"00000201" else
+80.			   6 when tx_addr(source) = x"00000002" else
+81.			   7 when tx_addr(source) = x"00000102" else
+82.			   8; --"00000202"
+83.	  -- HeMPS 3x4
+84.		target12 <= 0 when tx_addr(source) = x"00000000" else
+85.			    1 when tx_addr(source) = x"00000100" else
+86.			    2 when tx_addr(source) = x"00000200" else
+87.			    3 when tx_addr(source) = x"00000300" else
+88.			    4 when tx_addr(source) = x"00000001" else
+89.			    5 when tx_addr(source) = x"00000101" else
+90.			    6 when tx_addr(source) = x"00000201" else
+91.			    7 when tx_addr(source) = x"00000301" else
+92.			    8 when tx_addr(source) = x"00000002" else
+93.			    9 when tx_addr(source) = x"00000102" else
+94.			    10 when tx_addr(source) = x"00000202" else
+95.			    11 ;
+96.	
+97.		-- HeMPS 4x4
+98.		target16 <= 0 when tx_addr(source) = x"00000000" else
+99.			    1 when tx_addr(source) = x"00000100" else
+100.			    2 when tx_addr(source) = x"00000200" else
+101.			    3 when tx_addr(source) = x"00000300" else
+102.			    4 when tx_addr(source) = x"00000001" else
+103.			    5 when tx_addr(source) = x"00000101" else
+104.			    6 when tx_addr(source) = x"00000201" else
+105.			    7 when tx_addr(source) = x"00000301" else
+106.			    8 when tx_addr(source) = x"00000002" else
+107.			    9 when tx_addr(source) = x"00000102" else
+108.			    10 when tx_addr(source) = x"00000202" else
+109.			    11 when tx_addr(source) = x"00000302" else
+110.			    12 when tx_addr(source) = x"00000003" else
+111.			    13 when tx_addr(source) = x"00000103" else
+112.			    14 when tx_addr(source) = x"00000203" else
+113.			    15; -- x"00000303"
+114.	
+115.	end bus_ctrl;
+116.	

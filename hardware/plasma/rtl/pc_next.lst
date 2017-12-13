@@ -1,0 +1,85 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  pc_next.vhd
+10.	--
+11.	--  AUTHOR: Steve Rhoads (rhoadss@yahoo.com)
+12.	--          Ismael Augusto Grehs (grehs@inf.pucrs.br)
+13.	--
+14.	--  DATE CREATED: 2/8/01
+15.	--
+16.	--  COPYRIGHT: Software placed into the public domain by the author.
+17.	--    Software 'as is' without warranty.  Author liable for nothing.
+18.	--
+19.	--  Brief description:  Implements the Program Counter logic.
+20.	--    			Added pc_past for syscall implementation.
+21.	--
+22.	------------------------------------------------------------------------------------------------
+23.	
+24.	library ieee;
+25.	use ieee.std_logic_1164.all;
+26.	use work.mlite_pack.all;
+27.	
+28.	entity pc_next is
+29.	   port(clk         : in std_logic;
+30.	        reset_in    : in std_logic;
+31.	        pc_new      : in std_logic_vector(31 downto 2);
+32.	        take_branch : in std_logic;
+33.	        pause_in    : in std_logic;
+34.	        opcode25_0  : in std_logic_vector(25 downto 0);
+35.	        pc_source   : in pc_source_type;
+36.	        pc_future   : out std_logic_vector(31 downto 2);
+37.	        pc_current  : out std_logic_vector(31 downto 2);
+38.	        pc_plus4    : out std_logic_vector(31 downto 2);
+39.	      pc_past     : out std_logic_vector(31 downto 2));
+40.	end; --pc_next
+41.	
+42.	architecture logic of pc_next is
+43.	   signal pc_reg : std_logic_vector(31 downto 2); 
+44.	begin
+45.	
+46.	pc_select: process(clk, reset_in, pc_new, take_branch, pause_in, 
+47.	                 opcode25_0, pc_source, pc_reg)
+48.	   variable pc_inc      : std_logic_vector(31 downto 2);
+49.	   variable pc_next : std_logic_vector(31 downto 2);
+50.	begin
+51.	   pc_inc := bv_increment(pc_reg);  --pc_reg+1
+52.	
+53.	   case pc_source is
+54.	   when FROM_INC4 =>
+55.	      pc_next := pc_inc;
+56.	   when FROM_OPCODE25_0 =>
+57.	      pc_next := pc_reg(31 downto 28) & opcode25_0;
+58.	   when FROM_BRANCH | FROM_LBRANCH =>
+59.	      if take_branch = '1' then
+60.	         pc_next := pc_new;
+61.	      else
+62.	         pc_next := pc_inc;
+63.	      end if;
+64.	   when others =>
+65.	      pc_next := pc_inc;
+66.	   end case;
+67.	
+68.	   if pause_in = '1' then
+69.	      pc_next := pc_reg;
+70.	   end if;
+71.	
+72.	   if reset_in = '1' then
+73.	      pc_reg <= ZERO(31 downto 2);
+74.	      pc_next := pc_reg;
+75.	   elsif rising_edge(clk) then
+76.	      pc_past <= pc_reg;
+77.	      pc_reg <= pc_next;
+78.	   end if;
+79.	
+80.	   pc_future <= pc_next;
+81.	   pc_current <= pc_reg;
+82.	   pc_plus4 <= pc_inc;
+83.	end process;
+84.	
+85.	end; --logic

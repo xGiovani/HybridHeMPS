@@ -1,0 +1,71 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  alu.vhd
+10.	--
+11.	--  AUTHOR: Steve Rhoads (rhoadss@yahoo.com)
+12.	--
+13.	--  DATE CREATED: 2/8/01
+14.	--
+15.	--  COPYRIGHT: Software placed into the public domain by the author.
+16.	--    Software 'as is' without warranty.  Author liable for nothing.
+17.	--
+18.	--  Brief description:  Implements the ALU.
+19.	--
+20.	------------------------------------------------------------------------------------------------
+21.	
+22.	library ieee;
+23.	use ieee.std_logic_1164.all;
+24.	use work.mlite_pack.all;
+25.	
+26.	entity alu is
+27.	   generic(alu_type  : string := "DEF");
+28.	   port(a_in         : in  std_logic_vector(31 downto 0);
+29.	        b_in         : in  std_logic_vector(31 downto 0);
+30.	        alu_function : in  alu_function_type;
+31.	        c_alu        : out std_logic_vector(31 downto 0));
+32.	end; --alu
+33.	
+34.	architecture logic of alu is
+35.	   signal do_add    : std_logic;
+36.	   signal sum       : std_logic_vector(32 downto 0);
+37.	   signal less_than : std_logic;
+38.	begin
+39.	
+40.	   do_add <= '1' when alu_function = ALU_ADD else '0';
+41.	   sum <= bv_adder(a_in, b_in, do_add);
+42.	   less_than <= sum(32) when a_in(31) = b_in(31) or alu_function = ALU_LESS_THAN 
+43.	                else a_in(31);
+44.	
+45.	   GENERIC_ALU: if alu_type = "DEF" generate
+46.	      c_alu <= sum(31 downto 0) when alu_function=ALU_ADD or
+47.	                                     alu_function=ALU_SUBTRACT else
+48.	               ZERO(31 downto 1) & less_than when alu_function=ALU_LESS_THAN or 
+49.	                                alu_function=ALU_LESS_THAN_SIGNED else
+50.	               a_in or  b_in    when alu_function=ALU_OR else
+51.	               a_in and b_in    when alu_function=ALU_AND else
+52.	               a_in xor b_in    when alu_function=ALU_XOR else
+53.	               a_in nor b_in    when alu_function=ALU_NOR else
+54.	               ZERO;
+55.	   end generate;
+56.	
+57.	   AREA_OPTIMIZED_ALU: if alu_type = "OPT" generate
+58.	      c_alu <= sum(31 downto 0) when alu_function=ALU_ADD or 
+59.	                                alu_function=ALU_SUBTRACT else (others => 'Z');
+60.	      c_alu <= ZERO(31 downto 1) & less_than when alu_function=ALU_LESS_THAN or 
+61.	                                alu_function=ALU_LESS_THAN_SIGNED else 
+62.	                                (others => 'Z');
+63.	      c_alu <= a_in or  b_in    when alu_function=ALU_OR else (others => 'Z');
+64.	      c_alu <= a_in and b_in    when alu_function=ALU_AND else (others => 'Z');
+65.	      c_alu <= a_in xor b_in    when alu_function=ALU_XOR else (others => 'Z');
+66.	      c_alu <= a_in nor b_in    when alu_function=ALU_NOR else (others => 'Z');
+67.	      c_alu <= ZERO             when alu_function=ALU_NOTHING else (others => 'Z');
+68.	   end generate;
+69.	    
+70.	end; --architecture logic
+71.	

@@ -1,0 +1,29 @@
+1.	---------------------------------------------
+2.	-- Implementation of Daisy Chain Arbiter
+3.	---------------------------------------------
+4.	library ieee;
+5.	use ieee.std_logic_1164.all;
+6.	use work.HeMPS_defaults.all;
+7.	
+8.	entity daisy_chain is
+9.		port(	  
+10.		    request   : in std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0);
+11.		    grant     : out std_logic;
+12.		    using_bus : in std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0)
+13.		);
+14.	end entity daisy_chain;
+15.	
+16.	architecture arbiter of daisy_chain is
+17.		signal tmp : std_logic_vector(NUMBER_PROCESSORS_BUS-1 downto 0) := (others=> '0');
+18.	begin
+19.		-- Grant Signal <= '1' when someone requested the bus and the same is not been used
+20.		process(request, using_bus)
+21.		begin
+22.			if request /= tmp and using_bus = tmp then 
+23.				grant <= '1';
+24.			else 
+25.				grant <= '0';
+26.			end if;
+27.		end process;
+28.	  
+29.	end architecture arbiter;

@@ -1,0 +1,224 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  reg_bank.vhd
+10.	--
+11.	--  AUTHOR: Steve Rhoads (rhoadss@yahoo.com)
+12.	--
+13.	--  DATE CREATED: 2/2/01
+14.	--
+15.	--  COPYRIGHT: Software placed into the public domain by the author.
+16.	--    Software 'as is' without warranty.  Author liable for nothing.
+17.	--
+18.	--  Brief description:  Implements a register bank with 32 registers that are 32-bits wide.
+19.	--    			There are two read-ports and one write port.
+20.	--
+21.	------------------------------------------------------------------------------------------------
+22.	
+23.	library ieee;
+24.	use ieee.std_logic_1164.all;
+25.	use ieee.std_logic_unsigned.all;
+26.	use work.mlite_pack.all;
+27.	
+28.	--Uncomment following two lines for Xilinx RAM32X1D
+29.	--library unisim;              --Xilinx
+30.	--use unisim.vcomponents.all;  --Xilinx
+31.	--library UNISIM;
+32.	--use UNISIM.vcomponents.all;
+33.	library unisim;
+34.	use unisim.vcomponents.all;
+35.	
+36.	entity reg_bank is
+37.	   generic(memory_type : string := "XIL");
+38.	   port(clk            : in  std_logic;
+39.	      reset_in       : in  std_logic;
+40.	      pause          : in  std_logic;
+41.	      rs_index       : in  std_logic_vector(5 downto 0);
+42.	      rt_index       : in  std_logic_vector(5 downto 0);
+43.	      rd_index       : in  std_logic_vector(5 downto 0);
+44.	      reg_source_out : out std_logic_vector(31 downto 0);
+45.	      reg_target_out : out std_logic_vector(31 downto 0);
+46.	      reg_dest_new   : in  std_logic_vector(31 downto 0); 
+47.	      page           : out std_logic_vector(31 downto 0);
+48.	      intr_enable    : out std_logic);
+49.	end; --entity reg_bank
+50.	
+51.	
+52.	--------------------------------------------------------------------
+53.	-- The ram_block architecture attempts to use TWO dual-port memories.
+54.	-- Different FPGAs and ASICs need different implementations.
+55.	-- Choose one of the RAM implementations below.
+56.	-- I need feedback on this section!
+57.	--------------------------------------------------------------------
+58.	architecture ram_block of reg_bank is
+59.	
+60.	   signal intr_enable_reg : std_logic;
+61.	   type ram_type is array(31 downto 0) of std_logic_vector(31 downto 0);
+62.	   
+63.	   --controls access to dual-port memories
+64.	   signal addr_read1, addr_read2 : std_logic_vector(4 downto 0);
+65.	   signal addr_write             : std_logic_vector(4 downto 0);
+66.	   signal data_out1, data_out2   : std_logic_vector(31 downto 0);
+67.	   signal write_enable           : std_logic;  
+68.	   signal page_reg               : std_logic_vector(31 downto 0);
+69.	
+70.	begin
+71.	  
+72.	reg_proc: process(clk, rs_index, rt_index, rd_index, reg_dest_new, 
+73.	      intr_enable_reg, data_out1, data_out2, reset_in, pause)
+74.	begin
+75.	   page <= page_reg;
+76.	
+77.	   --setup for first dual-port memory
+78.	   if rs_index = "101110" then  --reg_epc CP0 14
+79.	      addr_read1 <= "00000";
+80.	   else
+81.	      addr_read1 <= rs_index(4 downto 0);
+82.	   end if;
+83.	   
+84.	   case rs_index is
+85.	   when "000000" => reg_source_out <= ZERO;
+86.	   when "101100" => reg_source_out <= ZERO(31 downto 1) & intr_enable_reg;
+87.	   
+88.	   --interrupt vector address = 0x44 (syscall)
+89.	   when "111110" => reg_source_out <= ZERO(31 downto 8) & "01000100";
+90.	                    page <= (others => '0');
+91.	                    
+92.	   --interrupt vector address = 0x3c (hardware)
+93.	   when "111111" => reg_source_out <= ZERO(31 downto 8) & "00111100";
+94.	                    page <= (others => '0');
+95.	                    
+96.	   when others   => reg_source_out <= data_out1;
+97.	   end case;
+98.	
+99.	   --setup for second dual-port memory
+100.	   addr_read2 <= rt_index(4 downto 0);
+101.	   case rt_index is
+102.	   when "000000" => reg_target_out <= ZERO;
+103.	   when others   => reg_target_out <= data_out2;
+104.	   end case;
+105.	
+106.	   --setup write port for both dual-port memories
+107.	   if rd_index /= "000000" and rd_index /= "101100" and rd_index /= "101010" and pause = '0' then
+108.	      write_enable <= '1';
+109.	   else
+110.	      write_enable <= '0';
+111.	   end if;
+112.	   
+113.	   if rd_index = "101110" then      --reg_epc CP0 14
+114.	      addr_write <= "00000";
+115.	   else
+116.	      addr_write <= rd_index(4 downto 0);
+117.	   end if;
+118.	
+119.	   if reset_in = '1' then
+120.	      intr_enable_reg <= '0';
+121.	      page_reg <= (others=>'0');
+122.	   elsif rising_edge(clk) then
+123.	      
+124.	      --disable interrupts
+125.	      if rd_index = "101110" then   --reg_epc CP0 14
+126.	         intr_enable_reg <= '0';       
+127.	      
+128.	      --sets interrupts register
+129.	      elsif rd_index = "101100" then
+130.	         intr_enable_reg <= reg_dest_new(0);      
+131.	        
+132.	      --sets page register
+133.	      elsif rd_index = "101010" then
+134.	         page_reg <= reg_dest_new;
+135.	      end if;
+136.	      
+137.	      --resets page on interrupts    
+138.	      if rs_index = "111110" or  rs_index = "111111" then
+139.	        page_reg <= (others => '0');      
+140.	      end if;
+141.	      
+142.	   end if;
+143.	
+144.	   intr_enable <= intr_enable_reg; 
+145.	   
+146.	end process;   
+147.	
+148.	--------------------------------------------------------------
+149.	---- Pick only ONE of the dual-port RAM implementations below!
+150.	--------------------------------------------------------------
+151.	
+152.	   -- Option #1
+153.	   -- One tri-port RAM, two read-ports, one write-port
+154.	   -- 32 registers 32-bits wide
+155.	   tri_port_mem:
+156.	   if memory_type = "TRI" generate
+157.	      ram_proc: process(clk, addr_read1, addr_read2, 
+158.	            addr_write, reg_dest_new, write_enable)
+159.	      variable tri_port_ram : ram_type;
+160.	      begin
+161.	         data_out1 <= tri_port_ram(conv_integer(addr_read1));
+162.	         data_out2 <= tri_port_ram(conv_integer(addr_read2));
+163.	         if rising_edge(clk) then
+164.	            if write_enable = '1' then
+165.	               tri_port_ram(conv_integer(addr_write)) := reg_dest_new;
+166.	            end if;
+167.	         end if;
+168.	      end process;
+169.	   end generate; --tri_port_mem
+170.	
+171.	
+172.	   -- Option #3
+173.	   -- RAM32X1D: 32 x 1 positive edge write, asynchronous read dual-port 
+174.	   -- distributed RAM for all Xilinx FPGAs
+175.	   xilinx_32x1d:
+176.	   if memory_type = "XIL" generate
+177.	   begin
+178.	      reg_loop: for i in 0 to 31 generate
+179.	      begin
+180.	         --Read port 1
+181.	         reg_bit1 : RAM32X1D
+182.	         port map (
+183.	            WCLK  => clk,              -- Port A write clock input
+184.	            WE    => write_enable,              -- Port A write enable input
+185.	            A0    => addr_write(0),    -- Port A address[0] input bit
+186.	            A1    => addr_write(1),    -- Port A address[1] input bit
+187.	            A2    => addr_write(2),    -- Port A address[2] input bit
+188.	            A3    => addr_write(3),    -- Port A address[3] input bit
+189.	            A4    => addr_write(4),    -- Port A address[4] input bit                        
+190.	            D     => reg_dest_new(i),  -- Port A 1-bit data input
+191.	            DPRA0 => addr_read1(0),    -- Port B address[0] input bit
+192.	            DPRA1 => addr_read1(1),    -- Port B address[1] input bit
+193.	            DPRA2 => addr_read1(2),    -- Port B address[2] input bit
+194.	            DPRA3 => addr_read1(3),    -- Port B address[3] input bit
+195.	            DPRA4 => addr_read1(4),    -- Port B address[4] input bit                        
+196.	            DPO   => data_out1(i),     -- Port B 1-bit data output
+197.	            SPO   => open              -- Port A 1-bit data output
+198.	         );
+199.	
+200.	         --Read port 2
+201.	         reg_bit2 : RAM32X1D
+202.	         port map (
+203.	            WCLK  => clk,              -- Port A write clock input
+204.	            WE    => write_enable,              -- Port A write enable input
+205.	            A0    => addr_write(0),    -- Port A address[0] input bit
+206.	            A1    => addr_write(1),    -- Port A address[1] input bit
+207.	            A2    => addr_write(2),    -- Port A address[2] input bit
+208.	            A3    => addr_write(3),    -- Port A address[3] input bit
+209.	            A4    => addr_write(4),    -- Port A address[4] input bit            
+210.	            D     => reg_dest_new(i),  -- Port A 1-bit data input
+211.	            DPRA0 => addr_read2(0),    -- Port B address[0] input bit
+212.	            DPRA1 => addr_read2(1),    -- Port B address[1] input bit
+213.	            DPRA2 => addr_read2(2),    -- Port B address[2] input bit
+214.	            DPRA3 => addr_read2(3),    -- Port B address[3] input bit
+215.	            DPRA4 => addr_read2(4),    -- Port B address[4] input bit            
+216.	            DPO   => data_out2(i),     -- Port B 1-bit data output
+217.	            SPO   => open              -- Port A 1-bit data output
+218.	         );
+219.	
+220.	      end generate; --reg_loop
+221.	
+222.	   end generate; --xilinx_32x1d
+223.	
+224.	end; --architecture ram_block

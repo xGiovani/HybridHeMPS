@@ -1,0 +1,348 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 7.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  May 2015
+8.	--
+9.	--  Source name:  dmni.vhd
+10.	--
+11.	--  Brief description:  Implements a DMNI module.
+12.	--
+13.	--  OPERATIONS:
+14.	--    0 - Copy from memory
+15.	--    1 - Copy to memory
+16.	---------------------------------------------------------------------
+17.	
+18.	library ieee;
+19.	use ieee.std_logic_1164.all;
+20.	use ieee.std_logic_unsigned.all;
+21.	use ieee.std_logic_arith.all;
+22.	use work.HeMPS_defaults.all;
+23.	
+24.	entity dmni is
+25.	    generic(address_router: regmetadeflit := (others=>'0'));
+26.	    port
+27.	    (  
+28.	        clock          : in  std_logic;
+29.	        reset          : in  std_logic;
+30.	        -- Configuration interface
+31.	        set_address    : in  std_logic;
+32.	        set_address_2  : in  std_logic;
+33.	        set_size       : in  std_logic;      
+34.	        set_size_2     : in  std_logic;
+35.	        set_op         : in  std_logic;
+36.	        start          : in  std_logic;
+37.	        config_data    : in  std_logic_vector(31 downto 0);
+38.	        -- Status outputs
+39.	        intr            : out  std_logic;
+40.	        send_active     : out  std_logic;
+41.	        receive_active  : out  std_logic;
+42.	        -- Memory interface
+43.	        mem_address    : out std_logic_vector(31 downto 0);
+44.	        mem_data_write : out std_logic_vector(31 downto 0);
+45.	        mem_data_read  : in  std_logic_vector(31 downto 0);
+46.	        mem_byte_we    : out std_logic_vector(3 downto 0);
+47.	        -- Noc Interface (Local port)
+48.	        tx              : out  std_logic;
+49.	        data_out        : out  regflit;
+50.	        credit_i        : in   std_logic;
+51.	        clock_tx        : out  std_logic;
+52.	        rx              : in   std_logic;
+53.	        data_in         : in   regflit;
+54.	        credit_o        : out  std_logic;
+55.	        clock_rx        : in   std_logic
+56.	    );  
+57.	end;
+58.	
+59.	architecture dmni of dmni is
+60.	
+61.	   constant DMNI_TIMER: std_logic_vector(4 downto 0):="10000";
+62.	   constant WORD_SIZE: std_logic_vector(4 downto 0):="00100";
+63.	   
+64.	   type dmni_state is (WAIT_state, LOAD, COPY_FROM_MEM, COPY_TO_MEM, FINISH);
+65.	   signal DMNI_Send: dmni_state;
+66.	   signal DMNI_Receive: dmni_state;
+67.	   
+68.	   type noc_state is (HEADER, PAYLOAD, DATA);
+69.	   signal SR: noc_state;
+70.	   
+71.	   type arbiter_state is (ROUND, SEND, RECEIVE);
+72.	   signal ARB: arbiter_state;
+73.	   
+74.	   signal bufferr: buff_dmni := (others=>(others=>'0'));
+75.	   subtype buffsizebool is std_logic_vector(0 to (TAM_BUFFER_DMNI-1)); 
+76.	   signal is_header: buffsizebool := (others=> '0');
+77.	   signal intr_count      : std_logic_vector(3 downto 0);
+78.	
+79.	   signal first,last: pointer := (others=>'0');
+80.	   signal add_buffer      : std_logic;
+81.	
+82.	   signal payload_size      : regflit;
+83.	
+84.	   signal timer           : std_logic_vector(4 downto 0);
+85.	   signal address         : std_logic_vector(31 downto 0);
+86.	   signal address_2       : std_logic_vector(31 downto 0);
+87.	   signal size            : std_logic_vector(31 downto 0); 
+88.	   signal size_2          : std_logic_vector(31 downto 0);
+89.	   signal send_address     : std_logic_vector(31 downto 0);
+90.	   signal send_address_2   : std_logic_vector(31 downto 0);
+91.	   signal send_size        : std_logic_vector(31 downto 0); 
+92.	   signal send_size_2      : std_logic_vector(31 downto 0);
+93.	   signal recv_address     : std_logic_vector(31 downto 0);
+94.	   signal recv_size        : std_logic_vector(31 downto 0); 
+95.	   signal prio             : std_logic;
+96.	   signal operation        : std_logic;
+97.	   signal read_av          : std_logic;
+98.	   signal slot_available   : std_logic;
+99.	   signal read_enable      : std_logic;
+100.	   signal write_enable     : std_logic;
+101.	
+102.	   signal send_active_2    : std_logic;
+103.	   signal receive_active_2 : std_logic;
+104.	   signal intr_counter_temp : std_logic_vector(3 downto 0);
+105.	begin
+106.	  --config
+107.	  proc_config: process(clock)
+108.	  begin 
+109.	    if(clock'event and clock = '1') then
+110.	      if (set_address = '1') then
+111.	        address <= config_data;
+112.	        address_2 <= (others => '0');
+113.	      elsif (set_address_2 = '1') then
+114.	        address_2 <= config_data;
+115.	      elsif (set_size = '1') then
+116.	        size <= config_data;
+117.	        size_2 <= (others => '0');
+118.	      elsif (set_size_2 = '1') then
+119.	        size_2 <= config_data;
+120.	      elsif (set_op = '1') then
+121.	        operation <= config_data(0);
+122.	      end if;
+123.	    end if;
+124.	  end process proc_config;
+125.	
+126.	  mem_address <= send_address when write_enable = '1' else recv_address;
+127.	  credit_o <= slot_available;
+128.	  slot_available <= '0' when (first = last and add_buffer = '1') else '1';
+129.	  read_av <= '0' when (first = last and add_buffer = '0') else '1';
+130.	  clock_tx <= clock;
+131.	  send_active <= send_active_2;
+132.	  receive_active <= receive_active_2;
+133.	
+134.	  arbiter: process (clock,reset)
+135.	  begin   
+136.	    if reset = '1' then
+137.	      read_enable <= '0';
+138.	      write_enable <= '0';
+139.	      timer <= "00000";
+140.	      prio <= '0';
+141.	      ARB <= ROUND;
+142.	      elsif (clock'event and clock = '1') then            
+143.	          case ARB is                
+144.	              when ROUND =>
+145.	                  if prio = '0' then
+146.	                    if DMNI_Receive = COPY_TO_MEM then
+147.	                       ARB <= RECEIVE;
+148.	                       read_enable <= '1';                        
+149.	                    elsif send_active_2 = '1' then
+150.	                       ARB <= SEND;
+151.	                       write_enable <= '1';
+152.	                    end if;
+153.	                  else
+154.	                    if send_active_2 = '1' then
+155.	                      ARB <= SEND;
+156.	                      write_enable <= '1';
+157.	                    elsif DMNI_Receive = COPY_TO_MEM then
+158.	                      ARB <= RECEIVE;
+159.	                      read_enable <= '1';
+160.	                    end if;
+161.	                  end if;
+162.	
+163.	              when SEND =>
+164.	                  if DMNI_Send = FINISH or (timer = DMNI_TIMER and receive_active_2 = '1')  then   
+165.	                    timer <= "00000";
+166.	                    ARB <= ROUND;
+167.	                    write_enable <= '0';
+168.	                    prio <= not prio;
+169.	                  else
+170.	                      timer <= timer + '1';
+171.	                  end if;            
+172.	          
+173.	              when RECEIVE =>            
+174.	                  if DMNI_Receive = FINISH or (timer = DMNI_TIMER and send_active_2 = '1') then                   
+175.	                    timer <= "00000";
+176.	                    ARB <= ROUND;
+177.	                    read_enable <= '0';
+178.	                    prio <= not prio;
+179.	                  else
+180.	                      timer <= timer + '1';
+181.	                  end if;
+182.	          end case;   
+183.	      end if;
+184.	  end process arbiter; 
+185.	
+186.	  proc_receive : process (clock, reset)
+187.	  begin 
+188.	    if (reset = '1') then
+189.	      first <= (others=> '0');
+190.	      last <= (others=> '0');
+191.	      payload_size <= (others=> '0');
+192.	      SR <= HEADER;
+193.	      add_buffer <= '0';
+194.	      receive_active_2 <= '0';
+195.	      DMNI_Receive <= WAIT_state;
+196.	      recv_address <= (others=> '0');
+197.	      recv_size <= (others=> '0');
+198.	      mem_data_write <= (others=> '0');
+199.	      is_header <= (others=> '0');
+200.	      intr_counter_temp <= (others=> '0');        
+201.	      mem_byte_we <= (others=> '0');  
+202.	    elsif (clock'event and clock = '1') then
+203.	      if (rx ='1' and slot_available = '1') then
+204.	        bufferr(CONV_INTEGER(last)) <= data_in;
+205.	        add_buffer <= '1';
+206.	        last <= last + 1;
+207.	
+208.	        --Read from NoC
+209.	        case( SR ) is           
+210.	           when HEADER =>
+211.	             intr_counter_temp <= intr_counter_temp + 1;
+212.	             --assert address_router = x"0000"
+213.	               --report   "Master receiving msg"                     
+214.	             --severity note;
+215.	             is_header(CONV_INTEGER(last)) <= '1';
+216.	             SR <= PAYLOAD;
+217.	           when PAYLOAD =>
+218.	             is_header(CONV_INTEGER(last)) <= '0';
+219.	             payload_size <= data_in - 1;
+220.	             SR <= DATA;
+221.	           when DATA =>
+222.	             is_header(CONV_INTEGER(last)) <= '0';
+223.	             if(payload_size = 0) then
+224.	                SR <= HEADER;
+225.	             else 
+226.	                payload_size <= payload_size - 1;
+227.	             end if;
+228.	         end case ; 
+229.	      end if; --(rx ='1' and slot_available = '1')
+230.	
+231.	      --Write to memory
+232.	      case( DMNI_Receive ) is        
+233.	        when WAIT_state =>
+234.	          if (start = '1' and operation = '1') then
+235.	            recv_address <= address - WORD_SIZE;
+236.	            recv_size <= size - 1;
+237.	            if(is_header(CONV_INTEGER(first)) = '1' and intr_counter_temp > 0) then
+238.	              intr_counter_temp <= intr_counter_temp -1;
+239.	            end if;
+240.	            receive_active_2 <= '1';
+241.	            DMNI_Receive <= COPY_TO_MEM;
+242.	          end if;
+243.	
+244.	        when COPY_TO_MEM =>
+245.	          if (read_enable = '1' and read_av = '1') then
+246.	            mem_byte_we <= "1111";
+247.	            mem_data_write <= bufferr(CONV_INTEGER(first));
+248.	            first <= first + 1;
+249.	            add_buffer <= '0';
+250.	            recv_address <= recv_address + WORD_SIZE;
+251.	            recv_size <= recv_size -1;
+252.	            if (recv_size = 0) then
+253.	              DMNI_Receive <= FINISH;
+254.	            end if ;
+255.	          else
+256.	            mem_byte_we <= "0000";
+257.	          end if;
+258.	
+259.	        when FINISH =>
+260.	          receive_active_2 <= '0';
+261.	          mem_byte_we <= "0000";
+262.	          recv_address <= (others=> '0');
+263.	          recv_size <= (others=> '0');
+264.	          DMNI_Receive <= WAIT_state;
+265.	        when OTHERS => 
+266.	      end case;
+267.	    end if; --rising_edge(clock)
+268.	  end process proc_receive;
+269.	
+270.	  intr_count <= intr_counter_temp;
+271.	  intr <= '1' when intr_counter_temp > 0 else '0';
+272.	
+273.	  proc_send : process (clock, reset)
+274.	  begin 
+275.	    if(reset = '1') then
+276.	      DMNI_Send <= WAIT_state;
+277.	      send_active_2 <= '0';     
+278.	      tx <= '0';   
+279.	      send_size <= (others=> '0');
+280.	      send_size_2 <= (others=> '0');
+281.	      send_address <= (others=> '0');
+282.	      send_address_2 <= (others=> '0');
+283.	      data_out <= (others=> '0');
+284.	    elsif (clock'event and clock = '1') then
+285.	      case( DMNI_Send ) is        
+286.	        when WAIT_state =>
+287.	          if (start = '1' and operation = '0') then
+288.	            send_address <= address;
+289.	            send_address_2 <= address_2;
+290.	            send_size <= size;
+291.	            send_size_2 <= size_2;              
+292.	            send_active_2 <= '1';
+293.	            DMNI_Send <= LOAD;           
+294.	            --assert address_router = x"0000"
+295.	              --report   "Master sending msg"                     
+296.	            --severity note;
+297.	          end if ;
+298.	
+299.	        when LOAD =>
+300.	          if(credit_i = '1' and write_enable = '1') then
+301.	            send_address <= send_address + WORD_SIZE;
+302.	            DMNI_Send <= COPY_FROM_MEM;
+303.	          end if;
+304.	
+305.	        when COPY_FROM_MEM =>
+306.	          if(credit_i = '1' and write_enable = '1') then
+307.	                  if(send_size > 0) then
+308.	                    tx <= '1';
+309.	                    data_out <= mem_data_read;
+310.	                    send_address <= send_address + WORD_SIZE;
+311.	                    send_size <= send_size -1;
+312.	                  elsif (send_size_2 > 0) then
+313.	                    send_size <= send_size_2;
+314.	                    send_size_2 <= (others=> '0');
+315.	                    tx <= '0';
+316.	                    if(send_address_2(30 downto 28) = "000") then
+317.	                      send_address <= send_address_2;
+318.	                    else
+319.	                      send_address <= send_address_2 - WORD_SIZE;
+320.	                    end if;
+321.	                    DMNI_Send <= LOAD;
+322.	                  else
+323.	                    tx <= '0';
+324.	                    DMNI_Send <= FINISH;
+325.	                  end if;
+326.	          else
+327.	                if (credit_i = '0') then
+328.	                  send_size <= send_size + 1;
+329.	                  send_address <= send_address - WORD_SIZE - WORD_SIZE; -- address back 2 positions 
+330.	                else
+331.	                  send_address <= send_address - WORD_SIZE; -- address back 1 position
+332.	                end if;
+333.	                tx <= '0';
+334.	                DMNI_Send <= LOAD;
+335.	          end if;
+336.	
+337.	        when FINISH =>
+338.	          send_active_2     <= '0';
+339.	          send_address    <= (others=> '0');
+340.	          send_address_2  <= (others=> '0');
+341.	          send_size       <= (others=> '0');
+342.	          send_size_2     <= (others=> '0');
+343.	          DMNI_Send       <= WAIT_state;
+344.	        when OTHERS =>
+345.	      end case ;
+346.	    end if; --rising_edge(clock)
+347.	  end process proc_send;      
+348.	end dmni;

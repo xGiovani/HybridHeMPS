@@ -1,0 +1,139 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  Hermes_crossbar.vhd
+10.	--
+11.	--  Brief description: Description of NoC ports
+12.	--
+13.	----------------------------------------------------------------
+14.	--                                   CROSSBAR
+15.	--                         --------------
+16.	--              DATA_AV ->|              |
+17.	--              DATA_IN ->|              |
+18.	--             DATA_ACK <-|              |-> TX
+19.	--               SENDER ->|              |-> DATA_OUT
+20.	--                 FREE ->|              |<- CREDIT_I
+21.	--               TAB_IN ->|              |
+22.	--              TAB_OUT ->|              |
+23.	--                        --------------
+24.	----------------------------------------------------------------
+25.	
+26.	library IEEE;
+27.	use IEEE.std_logic_1164.all;
+28.	use IEEE.std_logic_unsigned.all;
+29.	use work.HeMPS_defaults.all;
+30.	use work.HemPS_PKG.all;
+31.	
+32.	entity Hermes_crossbar is
+33.	port(
+34.	        data_av:     in  regNport;
+35.	        data_in:     in  arrayNport_regflit;
+36.	        data_ack:    out regNport;
+37.	        sender:      in  regNport;
+38.	        free:        in  regNport;
+39.	        tab_in:      in  arrayNport_reg3;
+40.	        tab_out:     in  arrayNport_reg3;
+41.	        tx:          out regNport;
+42.	        data_out:    out arrayNport_regflit;
+43.	        credit_i:    in  regNport);
+44.	end Hermes_crossbar;
+45.	
+46.	architecture Hermes_crossbar of Hermes_crossbar is
+47.	
+48.	begin
+49.	
+50.	----------------------------------------------------------------------------------
+51.	-- PORTA LOCAL
+52.	----------------------------------------------------------------------------------
+53.	        tx(LOCAL) <= data_av(EAST) when tab_out(LOCAL)="000" and free(LOCAL)='0' else
+54.	                        data_av(WEST)  when tab_out(LOCAL)="001" and free(LOCAL)='0' else
+55.	                        data_av(NORTH) when tab_out(LOCAL)="010" and free(LOCAL)='0' else
+56.	                        data_av(SOUTH) when tab_out(LOCAL)="011" and free(LOCAL)='0' else
+57.	                        '0';
+58.	
+59.	        data_out(LOCAL) <= data_in(EAST) when tab_out(LOCAL)="000" and free(LOCAL)='0' else
+60.	                        data_in(WEST)  when tab_out(LOCAL)="001" and free(LOCAL)='0' else
+61.	                        data_in(NORTH) when tab_out(LOCAL)="010" and free(LOCAL)='0' else
+62.	                        data_in(SOUTH) when tab_out(LOCAL)="011" and free(LOCAL)='0' else
+63.	                        (others=>'0');
+64.	
+65.	        data_ack(LOCAL) <= credit_i(EAST) when tab_in(LOCAL)="000" and data_av(LOCAL)='1' else
+66.	                        credit_i(WEST)  when tab_in(LOCAL)="001" and data_av(LOCAL)='1' else
+67.	                        credit_i(NORTH) when tab_in(LOCAL)="010" and data_av(LOCAL)='1' else
+68.	                        credit_i(SOUTH) when tab_in(LOCAL)="011" and data_av(LOCAL)='1' else
+69.	                        '0';
+70.	----------------------------------------------------------------------------------
+71.	-- PORTA EAST
+72.	----------------------------------------------------------------------------------
+73.	        tx(EAST) <= data_av(WEST) when tab_out(EAST)="001" and free(EAST)='0' else
+74.	                        data_av(LOCAL) when tab_out(EAST)="100" and free(EAST)='0' else
+75.	                        '0';
+76.	
+77.	        data_out(EAST) <= data_in(WEST) when tab_out(EAST)="001" and free(EAST)='0' else
+78.	                        data_in(LOCAL) when tab_out(EAST)="100" and free(EAST)='0' else
+79.	                        (others=>'0');
+80.	
+81.	        data_ack(EAST) <= credit_i(WEST) when tab_in(EAST)="001" and data_av(EAST)='1' else
+82.	                        credit_i(NORTH) when tab_in(EAST)="010" and data_av(EAST)='1' else
+83.	                        credit_i(SOUTH) when tab_in(EAST)="011" and data_av(EAST)='1' else
+84.	                        credit_i(LOCAL) when tab_in(EAST)="100" and data_av(EAST)='1' else
+85.	                        '0';
+86.	----------------------------------------------------------------------------------
+87.	-- PORTA WEST
+88.	----------------------------------------------------------------------------------
+89.	        tx(WEST) <= data_av(EAST) when tab_out(WEST)="000" and free(WEST)='0' else
+90.	                        data_av(LOCAL) when tab_out(WEST)="100" and free(WEST)='0' else
+91.	                        '0';
+92.	
+93.	        data_out(WEST) <= data_in(EAST) when tab_out(WEST)="000" and free(WEST)='0' else
+94.	                        data_in(LOCAL) when tab_out(WEST)="100" and free(WEST)='0' else
+95.	                        (others=>'0');
+96.	
+97.	        data_ack(WEST) <= credit_i(EAST) when tab_in(WEST)="000" and data_av(WEST)='1' else
+98.	                        credit_i(NORTH) when tab_in(WEST)="010" and data_av(WEST)='1' else
+99.	                        credit_i(SOUTH) when tab_in(WEST)="011" and data_av(WEST)='1' else
+100.	                        credit_i(LOCAL) when tab_in(WEST)="100" and data_av(WEST)='1' else
+101.	                        '0';
+102.	----------------------------------------------------------------------------------
+103.	-- PORTA NORTH
+104.	----------------------------------------------------------------------------------
+105.	        tx(NORTH) <= data_av(EAST) when tab_out(NORTH)="000" and free(NORTH)='0' else
+106.	                        data_av(WEST)  when tab_out(NORTH)="001" and free(NORTH)='0' else
+107.	                        data_av(SOUTH) when tab_out(NORTH)="011" and free(NORTH)='0' else
+108.	                        data_av(LOCAL) when tab_out(NORTH)="100" and free(NORTH)='0' else
+109.	                        '0';
+110.	
+111.	        data_out(NORTH) <= data_in(EAST) when tab_out(NORTH)="000" and free(NORTH)='0' else
+112.	                        data_in(WEST)  when tab_out(NORTH)="001" and free(NORTH)='0' else
+113.	                        data_in(SOUTH) when tab_out(NORTH)="011" and free(NORTH)='0' else
+114.	                        data_in(LOCAL) when tab_out(NORTH)="100" and free(NORTH)='0' else
+115.	                        (others=>'0');
+116.	
+117.	        data_ack(NORTH) <= credit_i(SOUTH) when tab_in(NORTH)="011" and data_av(NORTH)='1' else
+118.	                        credit_i(LOCAL) when tab_in(NORTH)="100" and data_av(NORTH)='1' else
+119.	                        '0';
+120.	----------------------------------------------------------------------------------
+121.	-- PORTA SOUTH
+122.	----------------------------------------------------------------------------------
+123.	        tx(SOUTH) <= data_av(EAST) when tab_out(SOUTH)="000" and free(SOUTH)='0' else
+124.	                        data_av(WEST)  when tab_out(SOUTH)="001" and free(SOUTH)='0' else
+125.	                        data_av(NORTH) when tab_out(SOUTH)="010" and free(SOUTH)='0' else
+126.	                        data_av(LOCAL) when tab_out(SOUTH)="100" and free(SOUTH)='0' else
+127.	                        '0';
+128.	
+129.	        data_out(SOUTH) <= data_in(EAST) when tab_out(SOUTH)="000" and free(SOUTH)='0' else
+130.	                        data_in(WEST)  when tab_out(SOUTH)="001" and free(SOUTH)='0' else
+131.	                        data_in(NORTH) when tab_out(SOUTH)="010" and free(SOUTH)='0' else
+132.	                        data_in(LOCAL) when tab_out(SOUTH)="100" and free(SOUTH)='0' else
+133.	                        (others=>'0');
+134.	
+135.	        data_ack(SOUTH) <= credit_i(NORTH) when tab_in(SOUTH)="010" and data_av(SOUTH)='1' else
+136.	                        credit_i(LOCAL) when tab_in(SOUTH)="100" and data_av(SOUTH)='1' else
+137.	                        '0';
+138.	
+139.	end Hermes_crossbar;

@@ -1,0 +1,207 @@
+1.	library IEEE;
+2.	use IEEE.std_logic_1164.all;
+3.	use IEEE.std_logic_unsigned.all;
+4.	use work.HeMPS_defaults.all;
+5.	use work.HemPS_PKG.all;
+6.	
+7.	entity Crossbar_bridge is
+8.		port(
+9.	            clock        : in std_logic;
+10.	            reset        : in std_logic;
+11.		-- DMNI INTERFACE
+12.	            rx           : in std_logic;
+13.		    data_in      : in regflit;
+14.		    credit_o     : out std_logic;
+15.		-- Crossbar Interface
+16.	            data_out     : out regflit;
+17.	            credit_i     : in std_logic;
+18.		    tx           : out std_logic;
+19.		    tx_addr      : out regflit;
+20.	   	    tx_change_flit: out std_logic;
+21.		-- Crossbar Arbiter Signals
+22.		    grant        : in std_logic;
+23.		    request      : out std_logic
+24.		);
+25.	end Crossbar_bridge;
+26.	
+27.	architecture Crossbar_bridge of Crossbar_bridge is
+28.	
+29.	signal data_av, data_ack: std_logic := '0';
+30.	type fila_out is (S_INIT, S_REQUEST, S_PAYLOAD, S_SENDHEADER, S_END);
+31.	signal EA : fila_out;
+32.	
+33.	signal buf: buff := (others=>(others=>'0'));
+34.	signal first,last: pointer := (others=>'0');
+35.	signal tem_espaco: std_logic := '0';
+36.	signal counter_flit: regflit := (others=>'0');
+37.	signal header_reg: regflit := (others=>'0');
+38.	
+39.	begin
+40.		
+41.		--------------------------------------
+42.		-- There is available data on Buffer
+43.		tx <= data_av;
+44.	
+45.		-- Processor that will receive message confirm having space on buffer
+46.	        data_ack <= credit_i when data_av= '1' else '0';
+47.					
+48.		-- Stores the header fli indicating which processor on bus will communicate
+49.		header_reg <= buf(CONV_INTEGER(first)) when EA = S_SENDHEADER;
+50.	
+51.		tx_addr <= header_reg;
+52.	
+53.	        -------------------------------------------------------------------------------------------
+54.	        -- ENTRADA DE DADOS NA FILA
+55.	        -------------------------------------------------------------------------------------------
+56.			
+57.	        -- Verifica se existe espa�o na fila para armazenamento de flits.
+58.	        -- Se existe espa�o na fila o sinal tem_espaco_na_fila � igual 1.
+59.	        process(reset, clock)
+60.	        begin
+61.	                if reset='1' then
+62.	                        tem_espaco <= '1';
+63.	                elsif clock'event and clock='1' then
+64.	                        if not((first=x"0" and last=TAM_BUFFER - 1) or (first=last+1)) then
+65.	                                tem_espaco <= '1';
+66.	                        else
+67.	                                tem_espaco <= '0';
+68.	                        end if;
+69.	                end if;
+70.	        end process;
+71.			
+72.		-- Buffer has space to receive data from DMNI
+73.		credit_o <= tem_espaco;
+74.			
+75.		-- O ponteiro last � inicializado com o valor zero quando o reset � ativado.
+76.	        -- Quando o sinal rx � ativado indicando que existe um flit na porta de entrada �
+77.	        -- verificado se existe espa�o na fila para armazen�-lo. Se existir espa�o na fila o
+78.	        -- flit recebido � armazenado na posi��o apontada pelo ponteiro last e o mesmo �
+79.	        -- incrementado. Quando last atingir o tamanho da fila, ele recebe zero.
+80.	        process(reset, clock)
+81.	        begin
+82.	                if reset='1' then
+83.	                        last <= (others=>'0');
+84.	                elsif clock'event and clock='0' then
+85.	                        if tem_espaco='1' and rx='1' then
+86.	                                buf(CONV_INTEGER(last)) <= data_in;
+87.	                                --incrementa o last
+88.	                                if(last = TAM_BUFFER - 1) then 
+89.						last <= (others=>'0');
+90.	                                else 
+91.						last <= last + 1;
+92.	                                end if;
+93.	                        end if;
+94.	                end if;
+95.	        end process;
+96.	
+97.	        -------------------------------------------------------------------------------------------
+98.	        -- SA�DA DE DADOS NA FILA
+99.	        -------------------------------------------------------------------------------------------
+100.			
+101.		-- Data to Bus
+102.		data_out <= buf(CONV_INTEGER(first));
+103.			
+104.	        process(reset, clock)
+105.	        begin
+106.	                if reset='1' then
+107.	                        counter_flit <= (others=>'0');
+108.	                        data_av <= '0';
+109.	                        first <= (others=>'0');
+110.	                        EA <= S_INIT;
+111.				request <= '0';
+112.				tx_change_flit  <= '0';
+113.	                elsif clock'event and clock='1' then
+114.	                        case EA is
+115.	                                when S_INIT =>
+116.	                                        counter_flit <= (others=>'0');
+117.	                                        data_av <= '0';
+118.	                                        if first /= last then -- detectou dado na fila
+119.							EA <= S_REQUEST;
+120.							tx_change_flit  <= '1';
+121.							request <= '1';
+122.	                                        else
+123.	                                                EA <= S_INIT;
+124.	                                        end if;
+125.					-- Waiting for Crossbar
+126.					when S_REQUEST =>
+127.					        if grant = '1' then    -- Will start using the crossbar and sending the message
+128.							EA <= S_SENDHEADER;
+129.							--request <= '0';
+130.							data_av <= '1';
+131.						else	
+132.							request <= '1';
+133.							EA <= S_REQUEST;
+134.						end if;
+135.	                                when S_SENDHEADER  =>
+136.						tx_change_flit  <= '0';
+137.	                                        if data_ack = '1' then  -- confirmacao do envio do header
+138.	                                                -- retira o header do buffer e se tem dado no buffer pede envio do mesmo
+139.	                                                if (first = TAM_BUFFER -1) then
+140.	                                                        first <= (others=>'0');
+141.	                                                        if last /= 0 then 
+142.									data_av <= '1';
+143.	                                                        else 
+144.									data_av <= '0';
+145.	                                                        end if;
+146.	                                                else
+147.	                                                        first <= first+1;
+148.	                                                        if first+1 /= last then 
+149.									data_av <= '1';
+150.	                                                        else 
+151.									data_av <= '0';
+152.	                                                        end if;
+153.	                                                end if;
+154.	                                                EA <= S_PAYLOAD;
+155.	                                        else
+156.	                                                EA <= S_SENDHEADER;
+157.	                                        end if;
+158.	                                when S_PAYLOAD =>
+159.	                                        if data_ack = '1' and counter_flit /= x"1" then -- confirmacao do envio de um dado que nao eh o tail
+160.	                                                -- se counter_flit eh zero indica recepcao do size do payload
+161.	                                                if counter_flit = x"0" then    
+162.								counter_flit <=  buf(CONV_INTEGER(first));
+163.	                                                else 
+164.								counter_flit <= counter_flit - 1;
+165.	                                                end if;
+166.	
+167.	                                                -- retira um dado do buffer e se tem dado no buffer pede envio do mesmo
+168.	                                                if (first = TAM_BUFFER -1) then
+169.	                                                        first <= (others=>'0');
+170.	                                                        if last /= 0 then 
+171.									data_av <= '1';
+172.	                                                        else 
+173.									data_av <= '0';
+174.	                                                        end if;
+175.	                                                else
+176.	                                                        first <= first+1;
+177.	                                                        if first+1 /= last then 
+178.									data_av <= '1';
+179.	                                                        else 
+180.									data_av <= '0';
+181.	                                                        end if;
+182.	                                                end if;
+183.	                                                EA <= S_PAYLOAD;
+184.	                                        elsif data_ack = '1' and counter_flit = x"1" then -- confirmacao do envio do tail
+185.	                                                -- retira um dado do buffer
+186.	                                                if (first = TAM_BUFFER -1) then    
+187.								first <= (others=>'0');
+188.	                                                else 
+189.								first <= first+1;
+190.	                                                end if;
+191.	                                                data_av <= '0';
+192.	                                                EA <= S_END;
+193.	                                        elsif first /= last then -- se tem dado a ser enviado faz a requisicao
+194.	                                                data_av <= '1';
+195.	                                                EA <= S_PAYLOAD;
+196.	                                        else
+197.	                                                EA <= S_PAYLOAD;
+198.	                                        end if;
+199.	                                when S_END =>
+200.						request <= '0';
+201.	                                        data_av <= '0';
+202.	                                        EA <= S_INIT;
+203.	                        end case;
+204.	                end if;
+205.	        end process;  
+206.	
+207.	end architecture Crossbar_bridge;

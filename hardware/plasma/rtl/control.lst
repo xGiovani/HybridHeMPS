@@ -1,0 +1,622 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  control.vhd
+10.	--
+11.	--  AUTHOR: Steve Rhoads (rhoadss@yahoo.com)
+12.	--          Ismael Augusto Grehs (grehs@inf.pucrs.br)
+13.	--
+14.	--  COPYRIGHT: Software placed into the public domain by the author.
+15.	--    Software 'as is' without warranty.  Author liable for nothing.
+16.	--
+17.	--  DATE CREATED: 2/8/01
+18.	--
+19.	--  NOTE:  MIPS(tm) is a registered trademark of MIPS Technologies.
+20.	--    MIPS Technologies does not endorse and is not associated with
+21.	--    this project.
+22.	--
+23.	--  Brief description:  Controls the CPU by decoding the opcode and generating control 
+24.	--    			signals to the rest of the CPU.
+25.	--
+26.	--    This entity decodes the MIPS(tm) opcode into a 
+27.	--    Very-Long-Word-Instruction.  
+28.	--    The 32-bit opcode is converted to a 
+29.	--       6+6+6+16+5+2+3+3+2+2+3+2+4 = 60 bit VLWI opcode.
+30.	--    Based on information found in:
+31.	--       "MIPS RISC Architecture" by Gerry Kane and Joe Heinrich
+32.	--       and "The Designer's Guide to VHDL" by Peter J. Ashenden
+33.	--    Syscall instruction added by Ismael A. Grehs (experimental)
+34.	--
+35.	------------------------------------------------------------------------------------------------
+36.	
+37.	library ieee;
+38.	use ieee.std_logic_1164.all;
+39.	use work.mlite_pack.all;
+40.	
+41.	entity control is
+42.	   port(opcode           : in  std_logic_vector(31 downto 0);
+43.	        intr_signal      : in  std_logic;
+44.	        rs_index         : out std_logic_vector(5 downto 0);
+45.	        rt_index         : out std_logic_vector(5 downto 0);
+46.	        rd_index         : out std_logic_vector(5 downto 0);
+47.	        imm_out          : out std_logic_vector(15 downto 0);
+48.	        alu_func         : out alu_function_type;
+49.	        shift_func       : out shift_function_type;
+50.	        mult_func        : out mult_function_type;
+51.	        branch_func      : out branch_function_type;
+52.	        a_source_out     : out a_source_type;
+53.	        b_source_out     : out b_source_type;
+54.	        c_source_out     : out c_source_type;
+55.	        pc_source_out    : out pc_source_type;
+56.	        mem_source_out   : out mem_source_type);
+57.	end; --entity control
+58.	
+59.	architecture logic of control is
+60.	   signal intr_signal_int, intr_syscall : std_logic;
+61.	begin
+62.	
+63.	intr_signal_int <= intr_signal or intr_syscall;
+64.	
+65.	control_proc: process(opcode, intr_signal_int) 
+66.	   variable op, func       : std_logic_vector(5 downto 0);
+67.	   variable syscall     : std_logic;
+68.	   variable rs, rt, rd     : std_logic_vector(5 downto 0);
+69.	   variable rtx            : std_logic_vector(4 downto 0);
+70.	   variable imm            : std_logic_vector(15 downto 0);   
+71.	   variable instruction     : integer := 0;
+72.	   variable alu_function   : alu_function_type;
+73.	   variable shift_function : shift_function_type;
+74.	   variable mult_function  : mult_function_type;
+75.	   variable a_source       : a_source_type;
+76.	   variable b_source       : b_source_type;
+77.	   variable c_source       : c_source_type;
+78.	   variable pc_source      : pc_source_type;
+79.	   variable branch_function: branch_function_type;
+80.	   variable mem_source     : mem_source_type;
+81.	begin
+82.	   alu_function := ALU_NOTHING;
+83.	   shift_function := SHIFT_NOTHING;
+84.	   mult_function := MULT_NOTHING;
+85.	   a_source := A_FROM_REG_SOURCE;
+86.	   b_source := B_FROM_REG_TARGET;
+87.	   c_source := C_FROM_NULL;
+88.	   pc_source := FROM_INC4;
+89.	   branch_function := BRANCH_EQ;
+90.	   mem_source := MEM_FETCH;
+91.	   op := opcode(31 downto 26);
+92.	   rs := '0' & opcode(25 downto 21);
+93.	   rt := '0' & opcode(20 downto 16);
+94.	   rtx := opcode(20 downto 16);
+95.	   rd := '0' & opcode(15 downto 11);
+96.	   func := opcode(5 downto 0);
+97.	   imm := opcode(15 downto 0);
+98.	   syscall := '0';
+99.	
+100.	   case op is
+101.	   when "000000" =>   --SPECIAL
+102.		instruction := instruction + 1;
+103.	--report "The value of 'instruction' is " & integer'image(instruction);
+104.	      case func is
+105.	      when "000000" =>   --SLL   r[rd]=r[rt]<<re;
+106.	         a_source := A_FROM_IMM10_6;
+107.	         c_source := C_FROM_SHIFT;
+108.	         shift_function := SHIFT_LEFT_UNSIGNED;
+109.	
+110.	      when "000010" =>   --SRL   r[rd]=u[rt]>>re;
+111.	         a_source := A_FROM_IMM10_6;
+112.	         c_source := C_FROM_shift;
+113.	         shift_function := SHIFT_RIGHT_UNSIGNED;
+114.	
+115.	      when "000011" =>   --SRA   r[rd]=r[rt]>>re;
+116.	         a_source := A_FROM_IMM10_6;
+117.	         c_source := C_FROM_SHIFT;
+118.	         shift_function := SHIFT_RIGHT_SIGNED;
+119.	
+120.	      when "000100" =>   --SLLV  r[rd]=r[rt]<<r[rs];
+121.	         c_source := C_FROM_SHIFT;
+122.	         shift_function := SHIFT_LEFT_UNSIGNED;
+123.	
+124.	      when "000110" =>   --SRLV  r[rd]=u[rt]>>r[rs];
+125.	         c_source := C_FROM_SHIFT;
+126.	         shift_function := SHIFT_RIGHT_UNSIGNED;
+127.	
+128.	      when "000111" =>   --SRAV  r[rd]=r[rt]>>r[rs];
+129.	         c_source := C_FROM_SHIFT;
+130.	         shift_function := SHIFT_RIGHT_SIGNED;
+131.	
+132.	      when "001000" =>   --JR    s->pc_next=r[rs];
+133.	         pc_source := FROM_BRANCH;
+134.	         alu_function := ALU_ADD;
+135.	         branch_function := BRANCH_YES;
+136.	
+137.	      when "001001" =>   --JALR  r[rd]=s->pc_next; s->pc_next=r[rs];
+138.	         c_source := C_FROM_PC_PLUS4;
+139.	         pc_source := FROM_BRANCH;
+140.	         alu_function := ALU_ADD;
+141.	         branch_function := BRANCH_YES;
+142.	
+143.	      when "001010" =>   --MOVZ  if(!r[rt]) r[rd]=r[rs]; /*IV*/
+144.	--         c_source := C_FROM_REG_SOURCE_EQZ;
+145.	
+146.	      when "001011" =>   --MOVN  if(r[rt]) r[rd]=r[rs];  /*IV*/
+147.	--         c_source := FROM_REG_SOURCE_NEZ;
+148.	
+149.	      when "001100" =>   --SYSCALL
+150.	--         if(r[4]==0) printf("0x%8.8lx ",r[5]);
+151.	         syscall := '1';
+152.	   
+153.	      when "001101" =>   --BREAK s->wakeup=1;
+154.	      when "001111" =>   --SYNC  s->wakeup=1;
+155.	      when "010000" =>   --MFHI  r[rd]=s->hi;
+156.	         c_source := C_FROM_MULT;
+157.	         mult_function := MULT_READ_HI;
+158.	
+159.	      when "010001" =>   --FTHI  s->hi=r[rs];
+160.	         mult_function := MULT_WRITE_HI;
+161.	
+162.	      when "010010" =>   --MFLO  r[rd]=s->lo;
+163.	         c_source := C_FROM_MULT;
+164.	         mult_function := MULT_READ_LO;
+165.	
+166.	      when "010011" =>   --MTLO  s->lo=r[rs];
+167.	         mult_function := MULT_WRITE_LO;
+168.	
+169.	      when "011000" =>   --MULT  s->lo=r[rs]*r[rt]; s->hi=0;
+170.	         mult_function := MULT_SIGNED_MULT;
+171.	
+172.	      when "011001" =>   --MULTU s->lo=r[rs]*r[rt]; s->hi=0;
+173.	         mult_function := MULT_MULT;
+174.	
+175.	      when "011010" =>   --DIV   s->lo=r[rs]/r[rt]; s->hi=r[rs]%r[rt];
+176.	         mult_function := MULT_SIGNED_DIVIDE;
+177.	
+178.	      when "011011" =>   --DIVU  s->lo=r[rs]/r[rt]; s->hi=r[rs]%r[rt];
+179.	         mult_function := MULT_DIVIDE;
+180.	
+181.	      when "100000" =>   --ADD   r[rd]=r[rs]+r[rt];
+182.	         c_source := C_FROM_ALU;
+183.	         alu_function := ALU_ADD;
+184.	
+185.	      when "100001" =>   --ADDU  r[rd]=r[rs]+r[rt];
+186.	         c_source := C_FROM_ALU;
+187.	         alu_function := ALU_ADD;
+188.	
+189.	      when "100010" =>   --SUB   r[rd]=r[rs]-r[rt];
+190.	         c_source := C_FROM_ALU;
+191.	         alu_function := ALU_SUBTRACT;
+192.	
+193.	      when "100011" =>   --SUBU  r[rd]=r[rs]-r[rt];
+194.	         c_source := C_FROM_ALU;
+195.	         alu_function := ALU_SUBTRACT;
+196.	
+197.	      when "100100" =>   --AND   r[rd]=r[rs]&r[rt];
+198.	         c_source := C_FROM_ALU;
+199.	         alu_function := ALU_AND;
+200.	
+201.	      when "100101" =>   --OR    r[rd]=r[rs]|r[rt];
+202.	         c_source := C_FROM_ALU;
+203.	         alu_function := ALU_OR;
+204.	
+205.	      when "100110" =>   --XOR   r[rd]=r[rs]^r[rt];
+206.	         c_source := C_FROM_ALU;
+207.	         alu_function := ALU_XOR;
+208.	
+209.	      when "100111" =>   --NOR   r[rd]=~(r[rs]|r[rt]);
+210.	         c_source := C_FROM_ALU;
+211.	         alu_function := ALU_NOR;
+212.	
+213.	      when "101010" =>   --SLT   r[rd]=r[rs]<r[rt];
+214.	         c_source := C_FROM_ALU;
+215.	         alu_function := ALU_LESS_THAN_SIGNED;
+216.	
+217.	      when "101011" =>   --SLTU  r[rd]=u[rs]<u[rt];
+218.	         c_source := C_FROM_ALU;
+219.	         alu_function := ALU_LESS_THAN;
+220.	
+221.	      when "101101" =>   --DADDU r[rd]=r[rs]+u[rt];
+222.	         c_source := C_FROM_ALU;
+223.	         alu_function := ALU_ADD;
+224.	
+225.	      when "110001" =>   --TGEU
+226.	      when "110010" =>   --TLT
+227.	      when "110011" =>   --TLTU
+228.	      when "110100" =>   --TEQ 
+229.	      when "110110" =>   --TNE 
+230.	      when others =>
+231.	      end case;
+232.	
+233.	   when "000001" =>   --REGIMM
+234.		instruction := instruction + 1;
+235.	--report "The value of 'instruction' is " & integer'image(instruction);
+236.	      rt := "000000";
+237.	      rd := "011111";
+238.	      a_source := A_FROM_PC;
+239.	      b_source := B_FROM_IMMX4;
+240.	      alu_function := ALU_ADD;
+241.	      pc_source := FROM_BRANCH;
+242.	      branch_function := BRANCH_GTZ;
+243.	      --if(test) pc=pc+imm*4
+244.	
+245.	      case rtx is
+246.	      when "10000" =>   --BLTZAL  r[31]=s->pc_next; branch=r[rs]<0;
+247.	         c_source := C_FROM_PC_PLUS4;
+248.	         branch_function := BRANCH_LTZ;
+249.	
+250.	      when "00000" =>   --BLTZ    branch=r[rs]<0;
+251.	         branch_function := BRANCH_LTZ;
+252.	
+253.	      when "10001" =>   --BGEZAL  r[31]=s->pc_next; branch=r[rs]>=0;
+254.	         c_source := C_FROM_PC_PLUS4;
+255.	         branch_function := BRANCH_GEZ;
+256.	
+257.	      when "00001" =>   --BGEZ    branch=r[rs]>=0;
+258.	         branch_function := BRANCH_GEZ;
+259.	
+260.	      when "10010" =>   --BLTZALL r[31]=s->pc_next; lbranch=r[rs]<0;
+261.	         c_source := C_FROM_PC_PLUS4;
+262.	         pc_source := FROM_LBRANCH;
+263.	         branch_function := BRANCH_LTZ;
+264.	
+265.	      when "00010" =>   --BLTZL   lbranch=r[rs]<0;
+266.	         pc_source := FROM_LBRANCH;
+267.	         branch_function := BRANCH_LTZ;
+268.	
+269.	      when "10011" =>   --BGEZALL r[31]=s->pc_next; lbranch=r[rs]>=0;
+270.	         c_source := C_FROM_PC_PLUS4;
+271.	         pc_source := FROM_LBRANCH;
+272.	         branch_function := BRANCH_GEZ;
+273.	
+274.	      when "00011" =>   --BGEZL   lbranch=r[rs]>=0;
+275.	         pc_source := FROM_LBRANCH;
+276.	         branch_function := BRANCH_GEZ;
+277.	
+278.	     when others =>
+279.	     end case;
+280.	
+281.	   when "000011" =>   --JAL    r[31]=s->pc_next; s->pc_next=(s->pc&0xf0000000)|target;
+282.	      c_source := C_FROM_PC_PLUS4;
+283.	      rd := "011111";
+284.	      pc_source := FROM_OPCODE25_0;
+285.		instruction := instruction + 1;
+286.	--report "The value of 'instruction' is " & integer'image(instruction);
+287.	   when "000010" =>   --J      s->pc_next=(s->pc&0xf0000000)|target; 
+288.	      pc_source := FROM_OPCODE25_0;
+289.		instruction := instruction + 1;
+290.	--report "The value of 'instruction' is " & integer'image(instruction);
+291.	   when "000100" =>   --BEQ    branch=r[rs]==r[rt];
+292.	      a_source := A_FROM_PC;
+293.	      b_source := B_FROM_IMMX4;
+294.	      alu_function := ALU_ADD;
+295.	      pc_source := FROM_BRANCH;
+296.	      branch_function := BRANCH_EQ;
+297.		instruction := instruction + 1;
+298.	--report "The value of 'instruction' is " & integer'image(instruction);
+299.	   when "000101" =>   --BNE    branch=r[rs]!=r[rt];
+300.	      a_source := A_FROM_PC;
+301.	      b_source := B_FROM_IMMX4;
+302.	      alu_function := ALU_ADD;
+303.	      pc_source := FROM_BRANCH;
+304.	      branch_function := BRANCH_NE;
+305.		instruction := instruction + 1;
+306.	--report "The value of 'instruction' is " & integer'image(instruction);
+307.	   when "000110" =>   --BLEZ   branch=r[rs]<=0;
+308.	      a_source := A_FROM_PC;
+309.	      b_source := b_FROM_IMMX4;
+310.	      alu_function := ALU_ADD;
+311.	      pc_source := FROM_BRANCH;
+312.	      branch_function := BRANCH_LEZ;
+313.		instruction := instruction + 1;
+314.	--report "The value of 'instruction' is " & integer'image(instruction);
+315.	   when "000111" =>   --BGTZ   branch=r[rs]>0;
+316.	      a_source := A_FROM_PC;
+317.	      b_source := B_FROM_IMMX4;
+318.	      alu_function := ALU_ADD;
+319.	      pc_source := FROM_BRANCH;
+320.	      branch_function := BRANCH_GTZ;
+321.		instruction := instruction + 1;
+322.	--report "The value of 'instruction' is " & integer'image(instruction);
+323.	   when "001000" =>   --ADDI   r[rt]=r[rs]+(short)imm;
+324.	      b_source := B_FROM_SIGNED_IMM;
+325.	      c_source := C_FROM_ALU;
+326.	      rd := rt;
+327.	      alu_function := ALU_ADD;
+328.		instruction := instruction + 1;
+329.	--report "The value of 'instruction' is " & integer'image(instruction);
+330.	   when "001001" =>   --ADDIU  u[rt]=u[rs]+(short)imm;
+331.	      b_source := B_FROM_SIGNED_IMM;
+332.	      c_source := C_FROM_ALU;
+333.	      rd := rt;
+334.	      alu_function := ALU_ADD;
+335.		instruction := instruction + 1;
+336.	--report "The value of 'instruction' is " & integer'image(instruction);
+337.	   when "001010" =>   --SLTI   r[rt]=r[rs]<(short)imm;
+338.	      b_source := B_FROM_SIGNED_IMM;
+339.	      c_source := C_FROM_ALU;
+340.	      rd := rt;
+341.	      alu_function := ALU_LESS_THAN_SIGNED;
+342.		instruction := instruction + 1;
+343.	--report "The value of 'instruction' is " & integer'image(instruction);
+344.	   when "001011" =>   --SLTIU  u[rt]=u[rs]<(unsigned long)(short)imm;
+345.	      b_source := B_FROM_IMM;
+346.	      c_source := C_FROM_ALU;
+347.	      rd := rt;
+348.	      alu_function := ALU_LESS_THAN;
+349.		instruction := instruction + 1;
+350.	--report "The value of 'instruction' is " & integer'image(instruction);
+351.	   when "001100" =>   --ANDI   r[rt]=r[rs]&imm;
+352.	      b_source := B_FROM_IMM;
+353.	      c_source := C_FROM_ALU;
+354.	      rd := rt;
+355.	      alu_function := ALU_AND;
+356.		instruction := instruction + 1;
+357.	--report "The value of 'instruction' is " & integer'image(instruction);
+358.	   when "001101" =>   --ORI    r[rt]=r[rs]|imm;
+359.	      b_source := B_FROM_IMM;
+360.	      c_source := C_FROM_ALU;
+361.	      rd := rt;
+362.	      alu_function := ALU_OR;
+363.		instruction := instruction + 1;
+364.	--report "The value of 'instruction' is " & integer'image(instruction);
+365.	   when "001110" =>   --XORI   r[rt]=r[rs]^imm;
+366.	      b_source := B_FROM_IMM;
+367.	      c_source := C_FROM_ALU;
+368.	      rd := rt;
+369.	      alu_function := ALU_XOR;
+370.		instruction := instruction + 1;
+371.	--report "The value of 'instruction' is " & integer'image(instruction);
+372.	   when "001111" =>   --LUI    r[rt]=(imm<<16);
+373.	      c_source := C_FROM_IMM_SHIFT16;
+374.	      rd := rt;
+375.		instruction := instruction + 1;
+376.	--report "The value of 'instruction' is " & integer'image(instruction);
+377.	   when "010000" =>   --COP0
+378.		instruction := instruction + 1;
+379.	--report "The value of 'instruction' is " & integer'image(instruction);
+380.	      alu_function := ALU_OR;
+381.	      c_source := C_FROM_ALU;
+382.	      if opcode(23) = '0' then  --move from CP0
+383.	         rs := '1' & opcode(15 downto 11);
+384.	         rt := "000000";
+385.	         rd := '0' & opcode(20 downto 16);
+386.	      else                      --move to CP0
+387.	         rs := "000000";
+388.	         rd(5) := '1';
+389.	         pc_source := FROM_BRANCH;   --delay possible interrupt
+390.	         branch_function := BRANCH_NO;
+391.	      end if;
+392.	
+393.	   when "010001" =>   --COP1	
+394.	instruction := instruction + 1;
+395.	--report "The value of 'instruction' is " & integer'image(instruction);
+396.	   when "010010" =>   --COP2	
+397.	instruction := instruction + 1;
+398.	--report "The value of 'instruction' is " & integer'image(instruction);
+399.	   when "010011" =>   --COP3	
+400.	instruction := instruction + 1;
+401.	--report "The value of 'instruction' is " & integer'image(instruction);
+402.	   when "010100" =>   --BEQL   lbranch=r[rs]==r[rt];
+403.		instruction := instruction + 1;
+404.	--report "The value of 'instruction' is " & integer'image(instruction);
+405.	      a_source := A_FROM_PC;
+406.	      b_source := B_FROM_IMMX4;
+407.	      alu_function := ALU_ADD;
+408.	      pc_source := FROM_LBRANCH;
+409.	      branch_function := BRANCH_EQ;
+410.	
+411.	   when "010101" =>   --BNEL   lbranch=r[rs]!=r[rt];
+412.		instruction := instruction + 1;
+413.	--report "The value of 'instruction' is " & integer'image(instruction);
+414.	      a_source := A_FROM_PC;
+415.	      b_source := B_FROM_IMMX4;
+416.	      alu_function := ALU_ADD;
+417.	      pc_source := FROM_LBRANCH;
+418.	      branch_function := BRANCH_NE;
+419.	
+420.	   when "010110" =>   --BLEZL  lbranch=r[rs]<=0;
+421.		instruction := instruction + 1;
+422.	--report "The value of 'instruction' is " & integer'image(instruction);
+423.	      a_source := A_FROM_PC;
+424.	      b_source := B_FROM_IMMX4;
+425.	      alu_function := ALU_ADD;
+426.	      pc_source := FROM_LBRANCH;
+427.	      branch_function := BRANCH_LEZ;
+428.	
+429.	   when "010111" =>   --BGTZL  lbranch=r[rs]>0;
+430.	      a_source := A_FROM_PC;
+431.	      b_source := B_FROM_IMMX4;
+432.	      alu_function := ALU_ADD;
+433.	      pc_source := FROM_LBRANCH;
+434.	      branch_function := BRANCH_GTZ;
+435.		instruction := instruction + 1;
+436.	--report "The value of 'instruction' is " & integer'image(instruction);
+437.	   when "100000" =>   --LB     r[rt]=*(signed char*)ptr;
+438.	      a_source := A_FROM_REG_SOURCE;
+439.	      b_source := B_FROM_SIGNED_IMM;
+440.	      alu_function := ALU_ADD;
+441.	      rd := rt;
+442.	      c_source := C_FROM_MEMORY;
+443.	      mem_source := MEM_READ8S;    --address=(short)imm+r[rs];
+444.		instruction := instruction + 1;
+445.	--report "The value of 'instruction' is " & integer'image(instruction);
+446.	   when "100001" =>   --LH     r[rt]=*(signed short*)ptr;
+447.	      a_source := A_FROM_REG_SOURCE;
+448.	      b_source := B_FROM_SIGNED_IMM;
+449.	      alu_function := ALU_ADD;
+450.	      rd := rt;
+451.	      c_source := C_FROM_MEMORY;
+452.	      mem_source := MEM_READ16S;   --address=(short)imm+r[rs];
+453.		instruction := instruction + 1;
+454.	--report "The value of 'instruction' is " & integer'image(instruction);
+455.	   when "100010" =>   --LWL    //Not Implemented
+456.	      a_source := A_FROM_REG_SOURCE;
+457.	      b_source := B_FROM_SIGNED_IMM;
+458.	      alu_function := ALU_ADD;
+459.	      rd := rt;
+460.	      c_source := C_FROM_MEMORY;
+461.	      mem_source := MEM_READ32;
+462.		instruction := instruction + 1;
+463.	--report "The value of 'instruction' is " & integer'image(instruction);
+464.	   when "100011" =>   --LW     r[rt]=*(long*)ptr;
+465.	      a_source := A_FROM_REG_SOURCE;
+466.	      b_source := B_FROM_SIGNED_IMM;
+467.	      alu_function := ALU_ADD;
+468.	      rd := rt;
+469.	      c_source := C_FROM_MEMORY;
+470.	      mem_source := MEM_READ32;
+471.		instruction := instruction + 1;
+472.	--report "The value of 'instruction' is " & integer'image(instruction);
+473.	   when "100100" =>   --LBU    r[rt]=*(unsigned char*)ptr;
+474.	      a_source := A_FROM_REG_SOURCE;
+475.	      b_source := B_FROM_SIGNED_IMM;
+476.	      alu_function := ALU_ADD;
+477.	      rd := rt;
+478.	      c_source := C_FROM_MEMORY;
+479.	      mem_source := MEM_READ8;    --address=(short)imm+r[rs];
+480.		instruction := instruction + 1;
+481.	--report "The value of 'instruction' is " & integer'image(instruction);
+482.	   when "100101" =>   --LHU    r[rt]=*(unsigned short*)ptr;
+483.	      a_source := A_FROM_REG_SOURCE;
+484.	      b_source := B_FROM_SIGNED_IMM;
+485.	      alu_function := ALU_ADD;
+486.	      rd := rt;
+487.	      c_source := C_FROM_MEMORY;
+488.	      mem_source := MEM_READ16;    --address=(short)imm+r[rs];
+489.		instruction := instruction + 1;
+490.	--report "The value of 'instruction' is " & integer'image(instruction);
+491.	   when "100110" =>   --LWR    //Not Implemented
+492.		instruction := instruction + 1;
+493.	--report "The value of 'instruction' is " & integer'image(instruction); 
+494.	  when "101000" =>   --SB     *(char*)ptr=(char)r[rt];
+495.	      a_source := A_FROM_REG_SOURCE;
+496.	      b_source := B_FROM_SIGNED_IMM;
+497.	      alu_function := ALU_ADD;
+498.	      mem_source := MEM_WRITE8;   --address=(short)imm+r[rs];
+499.		instruction := instruction + 1;
+500.	--report "The value of 'instruction' is " & integer'image(instruction);
+501.	   when "101001" =>   --SH     *(short*)ptr=(short)r[rt];
+502.	      a_source := A_FROM_REG_SOURCE;
+503.	      b_source := B_FROM_SIGNED_IMM;
+504.	      alu_function := ALU_ADD;
+505.	      mem_source := MEM_WRITE16;
+506.		instruction := instruction + 1;
+507.	--report "The value of 'instruction' is " & integer'image(instruction);
+508.	   when "101010" =>   --SWL    //Not Implemented
+509.	      a_source := A_FROM_REG_SOURCE;
+510.	      b_source := B_FROM_SIGNED_IMM;
+511.	      alu_function := ALU_ADD;
+512.	      mem_source := MEM_WRITE32;  --address=(short)imm+r[rs];
+513.		instruction := instruction + 1;
+514.	--report "The value of 'instruction' is " & integer'image(instruction);
+515.	   when "101011" =>   --SW     *(long*)ptr=r[rt];
+516.	      a_source := A_FROM_REG_SOURCE;
+517.	      b_source := B_FROM_SIGNED_IMM;
+518.	      alu_function := ALU_ADD;
+519.	      mem_source := MEM_WRITE32;  --address=(short)imm+r[rs];
+520.		instruction := instruction + 1;
+521.	--report "The value of 'instruction' is " & integer'image(instruction);
+522.	   when "101110" =>   --SWR    //Not Implemented
+523.		instruction := instruction + 1;
+524.	--report "The value of 'instruction' is " & integer'image(instruction);   
+525.	when "101111" =>   --CACHE
+526.		instruction := instruction + 1;
+527.	--report "The value of 'instruction' is " & integer'image(instruction);
+528.	   when "110000" =>   --LL     r[rt]=*(long*)ptr;
+529.		instruction := instruction + 1;
+530.	--report "The value of 'instruction' is " & integer'image(instruction);
+531.	   when "110001" =>   --LWC1 
+532.		instruction := instruction + 1;
+533.	--report "The value of 'instruction' is " & integer'image(instruction);
+534.	   when "110010" =>   --LWC2 
+535.		instruction := instruction + 1;
+536.	--report "The value of 'instruction' is " & integer'image(instruction);
+537.	   when "110011" =>   --LWC3 
+538.		instruction := instruction + 1;
+539.	--report "The value of 'instruction' is " & integer'image(instruction);
+540.	   when "110101" =>   --LDC1 
+541.		instruction := instruction + 1;
+542.	--report "The value of 'instruction' is " & integer'image(instruction);
+543.	   when "110110" =>   --LDC2 
+544.		instruction := instruction + 1;
+545.	--report "The value of 'instruction' is " & integer'image(instruction);
+546.	   when "110111" =>   --LDC3 
+547.		instruction := instruction + 1;
+548.	--report "The value of 'instruction' is " & integer'image(instruction);
+549.	   when "111000" =>   --SC     *(long*)ptr=r[rt]; r[rt]=1;
+550.		instruction := instruction + 1;
+551.	--report "The value of 'instruction' is " & integer'image(instruction);
+552.	   when "111001" =>   --SWC1 
+553.		instruction := instruction + 1;
+554.	--report "The value of 'instruction' is " & integer'image(instruction);
+555.	   when "111010" =>   --SWC2 
+556.		instruction := instruction + 1;
+557.	--report "The value of 'instruction' is " & integer'image(instruction);
+558.	   when "111011" =>   --SWC3 
+559.		instruction := instruction + 1;
+560.	--report "The value of 'instruction' is " & integer'image(instruction);
+561.	   when "111101" =>   --SDC1 
+562.		instruction := instruction + 1;
+563.	--report "The value of 'instruction' is " & integer'image(instruction);
+564.	   when "111110" =>   --SDC2 
+565.		instruction := instruction + 1;
+566.	--report "The value of 'instruction' is " & integer'image(instruction);
+567.	   when "111111" =>   --SDC3 
+568.		instruction := instruction + 1;
+569.	--report "The value of 'instruction' is " & integer'image(instruction);
+570.	   when others =>
+571.	   	instruction := instruction + 1;
+572.	
+573.	   end case;
+574.	
+575.	   if c_source = C_FROM_NULL then
+576.	      rd := "000000";
+577.	   end if;
+578.	
+579.	   if intr_signal_int = '1' then
+580.	      
+581.	      -- fixes the interrupt on delay slot bug.
+582.	      -- implements syscalls
+583.	      if intr_signal = '1' then
+584.	         rs := "111111";  --interrupt vector for hardware
+585.	         c_source := C_FROM_PC_PAST;
+586.	      else
+587.	         rs := "111110";  --interrupt vector for syscall
+588.	         c_source := C_FROM_PC_PLUS4;  
+589.	      end if;
+590.	
+591.	      
+592.	      rt := "000000";
+593.	      rd := "101110";  --save PC in EPC
+594.	      alu_function := ALU_OR;
+595.	      shift_function := SHIFT_NOTHING;
+596.	      mult_function := MULT_NOTHING;
+597.	      branch_function := BRANCH_YES;
+598.	      a_source := A_FROM_REG_SOURCE;
+599.	      b_source := B_FROM_REG_TARGET;       
+600.	      pc_source := FROM_LBRANCH;
+601.	      mem_source := MEM_FETCH;
+602.	   end if;
+603.	
+604.	   rs_index <= rs;
+605.	   rt_index <= rt;
+606.	   rd_index <= rd;
+607.	   imm_out <= imm;
+608.	   alu_func <= alu_function;
+609.	   shift_func <= shift_function;
+610.	   mult_func <= mult_function;
+611.	   branch_func <= branch_function;
+612.	   a_source_out <= a_source;
+613.	   b_source_out <= b_source;
+614.	   c_source_out <= c_source;
+615.	   pc_source_out <= pc_source;
+616.	   mem_source_out <= mem_source;
+617.	   intr_syscall <= syscall;
+618.	   
+619.	
+620.	end process;
+621.	
+622.	end; --logic

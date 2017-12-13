@@ -1,0 +1,188 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  RouterCC.vhd
+10.	--
+11.	--  Brief description: Top module of the NoC - the NoC is built using only this module
+12.	--
+13.	---------------------------------------------------------------------------------------
+14.	--------------------------------------------------------------------------------------- 
+15.	--                                              ROUTER
+16.	--
+17.	--                                              NORTH               LOCAL
+18.	--                       ---------------------------------------------
+19.	--                      |                       ******         ****** |
+20.	--                      |                       *FILA*         *FILA* |
+21.	--                      |                       ******         ****** |
+22.	--                      |                   *************             |
+23.	--                      |                   *  ARBITRO  *             |
+24.	--                      | ******            *************      ****** |
+25.	--                 WEST | *FILA*            *************      *FILA* | EAST
+26.	--                      | ******            *  CONTROLE *      ****** |
+27.	--                      |                   *************             |
+28.	--                      |                       ******                |
+29.	--                      |                       *FILA*                |
+30.	--                      |                       ******                |
+31.	--                      -----------------------------------------------
+32.	--                                              SOUTH
+33.	--
+34.	--  As chaves realizam a transferência de mensagens entre núcleos. 
+35.	--  A chave possui uma lógica de controle de chaveamento e 5 portas bidirecionais:
+36.	--  East, West, North, South e Local. Cada porta possui uma fila para o armazenamento 
+37.	--  temporário de flits. A porta Local estabelece a comunicação entre a chave e seu 
+38.	--  núcleo. As demais portas ligam a chave às chaves vizinhas.
+39.	--  Os endereços das chaves são compostos pelas coordenadas XY da rede de interconexão, 
+40.	--  onde X é a posição horizontal e Y a posição vertical. A atribuição de endereços às 
+41.	--  chaves é necessária para a execução do algoritmo de chaveamento.
+42.	--  Os módulos principais que compõem a chave são: fila, árbitro e lógica de 
+43.	--  chaveamento implementada pelo controle_mux. Cada uma das filas da chave (E, W, N, 
+44.	--  S e L), ao receber um novo pacote requisita chaveamento ao árbitro. O árbitro 
+45.	--  seleciona a requisição de maior prioridade, quando existem requisições simultâneas, 
+46.	--  e encaminha o pedido de chaveamento à lógica de chaveamento. A lógica de 
+47.	--  chaveamento verifica se é possível atender à solicitação. Sendo possível, a conexão
+48.	--  é estabelecida e o árbitro é informado. Por sua vez, o árbitro informa a fila que 
+49.	--  começa a enviar os flits armazenados. Quando todos os flits do pacote foram 
+50.	--  enviados, a conexão é concluída pela sinalização, por parte da fila, através do 
+51.	--  sinal sender.
+52.	---------------------------------------------------------------------------------------
+53.	library IEEE;
+54.	use IEEE.std_logic_1164.all;
+55.	use IEEE.std_logic_unsigned.all;
+56.	use work.HeMPS_defaults.all;
+57.	use work.HemPS_PKG.all;
+58.	
+59.	entity RouterCC is
+60.	generic( address: std_logic_vector(15 downto 0));
+61.	port(
+62.	        clock:     in  std_logic;
+63.	        reset:     in  std_logic;
+64.	        clock_rx:  in  regNport;
+65.	        rx:        in  regNport;
+66.	        data_in:   in  arrayNport_regflit;
+67.	        credit_o:  out regNport;    
+68.	        clock_tx:  out regNport;
+69.	        tx:        out regNport;
+70.	        data_out:  out arrayNport_regflit;
+71.	        credit_i:  in  regNport);
+72.	end RouterCC;
+73.	
+74.	architecture RouterCC of RouterCC is
+75.	
+76.	signal h, ack_h, data_av, sender, data_ack: regNport := (others=>'0');
+77.	signal data: arrayNport_regflit := (others=>(others=>'0'));
+78.	signal mux_in, mux_out: arrayNport_reg3 := (others=>(others=>'0'));
+79.	signal free: regNport := (others=>'0');
+80.	
+81.	begin
+82.	
+83.	        FEast : Entity work.Hermes_buffer
+84.	        port map(
+85.	                clock => clock,
+86.	                reset => reset,
+87.	                data_in => data_in(0),
+88.	                rx => rx(0),
+89.	                h => h(0),
+90.	                ack_h => ack_h(0),
+91.	                data_av => data_av(0),
+92.	                data => data(0),
+93.	                sender => sender(0),
+94.	                clock_rx => clock_rx(0),
+95.	                data_ack => data_ack(0),
+96.	                credit_o => credit_o(0));
+97.	
+98.	        FWest : Entity work.Hermes_buffer
+99.	        port map(
+100.	                clock => clock,
+101.	                reset => reset,
+102.	                data_in => data_in(1),
+103.	                rx => rx(1),
+104.	                h => h(1),
+105.	                ack_h => ack_h(1),
+106.	                data_av => data_av(1),
+107.	                data => data(1),
+108.	                sender => sender(1),
+109.	                clock_rx => clock_rx(1),
+110.	                data_ack => data_ack(1),
+111.	                credit_o => credit_o(1));
+112.	
+113.	        FNorth : Entity work.Hermes_buffer
+114.	        port map(
+115.	                clock => clock,
+116.	                reset => reset,
+117.	                data_in => data_in(2),
+118.	                rx => rx(2),
+119.	                h => h(2),
+120.	                ack_h => ack_h(2),
+121.	                data_av => data_av(2),
+122.	                data => data(2),
+123.	                sender => sender(2),
+124.	                clock_rx => clock_rx(2),
+125.	                data_ack => data_ack(2),
+126.	                credit_o => credit_o(2));
+127.	
+128.	        FSouth : Entity work.Hermes_buffer
+129.	        port map(
+130.	                clock => clock,
+131.	                reset => reset,
+132.	                data_in => data_in(3),
+133.	                rx => rx(3),
+134.	                h => h(3),
+135.	                ack_h => ack_h(3),
+136.	                data_av => data_av(3),
+137.	                data => data(3),
+138.	                sender => sender(3),
+139.	                clock_rx => clock_rx(3),
+140.	                data_ack => data_ack(3),
+141.	                credit_o => credit_o(3));
+142.	
+143.	        FLocal : Entity work.Hermes_buffer
+144.	        port map(
+145.	                clock => clock,
+146.	                reset => reset,
+147.	                data_in => data_in(4),
+148.	                rx => rx(4),
+149.	                h => h(4),
+150.	                ack_h => ack_h(4),
+151.	                data_av => data_av(4),
+152.	                data => data(4),
+153.	                sender => sender(4),
+154.	                clock_rx => clock_rx(4),
+155.	                data_ack => data_ack(4),
+156.	                credit_o => credit_o(4));
+157.	
+158.	        SwitchControl : Entity work.SwitchControl(XY)
+159.	        port map(
+160.	                clock => clock,
+161.	                reset => reset,
+162.	                h => h,
+163.	                ack_h => ack_h,
+164.	                address => address,
+165.	                data => data,
+166.	                sender => sender,
+167.	                free => free,
+168.	                mux_in => mux_in,
+169.	                mux_out => mux_out);
+170.	
+171.	        CrossBar : Entity work.Hermes_crossbar
+172.	        port map(
+173.	                data_av => data_av,
+174.	                data_in => data,
+175.	                data_ack => data_ack,
+176.	                sender => sender,
+177.	                free => free,
+178.	                tab_in => mux_in,
+179.	                tab_out => mux_out,
+180.	                tx => tx,
+181.	                data_out => data_out,
+182.	                credit_i => credit_i);
+183.	
+184.	        CLK_TX : for i in 0 to(NPORT-1) generate
+185.	                clock_tx(i) <= clock;
+186.	        end generate CLK_TX;  
+187.	
+188.	end RouterCC;

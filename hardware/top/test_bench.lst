@@ -1,0 +1,225 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  test_bench.vhd
+10.	--
+11.	--  Brief description:  Test bench.
+12.	--
+13.	------------------------------------------------------------------------------------------------
+14.	
+15.	library IEEE;
+16.	use ieee.std_logic_1164.all;
+17.	use ieee.std_logic_arith.all;
+18.	use ieee.std_logic_unsigned.all;
+19.	use std.textio.all;
+20.	
+21.	use work.memory_pack.all;
+22.	use work.HeMPS_PKG.all;
+23.	
+24.	--! @file
+25.	--! @ingroup vhdl_group
+26.	--! @{
+27.	--! @}
+28.	
+29.	--! @brief entity brief description
+30.	 
+31.	--! @detailed detailed description
+32.	entity test_bench is
+33.	        generic(
+34.	                  log_file            : string := "output_master.txt"; --! port description
+35.	                  MAX_LINE_SIZE       : integer := 231;                --! port description
+36.	                  mlite_description   : string := "RTL";
+37.	                  ram_description     : string := "RTL";
+38.	                  router_description  : string := "RTL"
+39.	        );
+40.	end;
+41.	
+42.	architecture test_bench of test_bench is
+43.	        signal clock            : std_logic := '0';
+44.	        signal clock_200        : std_logic := '1';
+45.	        signal reset            : std_logic;
+46.	
+47.	        signal control_write_enable_debug      : std_logic;
+48.	        signal control_data_out_debug          : std_logic_vector(31 downto 0);
+49.	        signal control_busy_debug              : std_logic;
+50.	
+51.	        signal control_hemps_addr              : std_logic_vector(29 downto 0);
+52.	        signal control_hemps_data              : std_logic_vector(31 downto 0);
+53.	
+54.	        type state is (LER, WAIT_DDR, WR_HEMPS, START);
+55.	        signal EA                                              : state;
+56.	        
+57.	        type state2 is (S0, S1);
+58.	        signal CS: state2;
+59.	        
+60.	        signal counter                                                  : integer :=0;
+61.	        
+62.	        signal ack_app                 : std_logic;
+63.	        signal req_app                 : std_logic_vector(31 downto 0);
+64.	        signal debug                   :  integer;
+65.	        
+66.	begin
+67.	
+68.	       reset <= '1', '0' after 100 ns;
+69.	
+70.	       -- 100 MHz
+71.	       clock <= not clock after 5 ns;
+72.	       
+73.	       -- 200 MHz
+74.	       clock_200 <= not clock_200 after 1.25 ns;
+75.	
+76.	       --
+77.	       --  access the repository considering that the HeMPS and the external memory are running at different frequencies
+78.	       --
+79.	       -- process(clock_200, reset)
+80.	       -- begin
+81.	       --         if reset = '1' then
+82.	       --                 control_hemps_data_valid <= '0';
+83.	       --                 EA <= START;
+84.	       --         elsif rising_edge(clock_200) then
+85.	       --                 case EA is
+86.	       --                         when START  =>   if control_hemps_read_req_ant = '1' then
+87.	       --                                                 EA <= LER;
+88.	       --                                         else
+89.	       --                                                 EA <= START;
+90.	       --                                         end if;
+91.	                                               
+92.	       --                         when LER     =>  control_hemps_data_valid <= '0';
+93.	       --                                          EA <= WAIT_DDR;
+94.	                                                
+95.	       --                         when WAIT_DDR => EA <= WR_HEMPS;
+96.	                               
+97.	       --                         when WR_HEMPS =>  control_hemps_data_valid <= '1';
+98.	       --                                           if control_hemps_read_req_ant = '0' then
+99.	       --                                                   EA <= START;
+100.	       --                                           else
+101.	       --                                                   EA <= WR_HEMPS;
+102.	       --                                           end if;
+103.	       --                 end case;
+104.	       --                 control_hemps_read_req_ant <= control_hemps_read_req;
+105.	       --         end if;
+106.	       -- end process;
+107.	       
+108.	       control_hemps_data <= memory(CONV_INTEGER(control_hemps_addr(23 downto 2)));
+109.	       debug <= (CONV_INTEGER(control_hemps_addr(23 downto 2)));
+110.	       control_busy_debug <= '0';
+111.	
+112.	       --
+113.	       --  HeMPS instantiation 
+114.	       --
+115.	       HeMPS_crossbar: entity work.HeMPS
+116.	        generic map(
+117.	                mlite_description               => mlite_description,
+118.	                ram_description                 => ram_description,
+119.	                router_description              => router_description
+120.	        )
+121.	        port map(
+122.	                clock                   => clock,
+123.	                reset                   => reset,
+124.	                --repository
+125.	                mem_addr                => control_hemps_addr,
+126.	                data_read               => control_hemps_data,
+127.	                --debug
+128.	                write_enable_debug              => control_write_enable_debug,
+129.	                data_out_debug                  => control_data_out_debug,
+130.	                busy_debug                              => control_busy_debug,
+131.	                ack_app        => ack_app,
+132.	                req_app        => req_app     
+133.	        );
+134.	        
+135.	        
+136.	        
+137.	        process
+138.	              variable j : integer := 0;
+139.	        begin
+140.	                if reset = '1' then
+141.	                        req_app <= (others=>'0');
+142.	                        j:=0;
+143.	                else
+144.	                        loop1: while j<NUMBER_OF_APPS loop
+145.	                                wait for appstime(j);
+146.	                                req_app <= CONV_STD_LOGIC_VECTOR(j, 32) or x"80000000";
+147.	                                wait until ack_app'event and ack_app= '1';
+148.	                                req_app <= (others=>'0');
+149.	                                wait until ack_app'event and ack_app= '0';
+150.	                                j:= j + 1;
+151.	                        end loop loop1;
+152.	                        wait;
+153.	                end if;
+154.	        end process;
+155.	        
+156.	     --
+157.	     -- creates the output file 
+158.	     --
+159.	     process(control_write_enable_debug,reset)
+160.	       file store_file : text open write_mode is log_file;
+161.	       variable file_line : line;
+162.	       variable line_type: character;
+163.	       variable line_length : natural := 0;
+164.	       variable str: string (1 to 4);
+165.	       variable str_end: boolean;
+166.	     begin
+167.	        if reset = '1' then
+168.	                str_end := false;
+169.	                CS <= S0;      
+170.	        elsif rising_edge(control_write_enable_debug) then
+171.	                case CS is
+172.	                  when S0 =>
+173.	                          -- Reads the incoming string
+174.	                          line_type := character'val(conv_integer(control_data_out_debug(7 downto 0)));
+175.	                          
+176.	                          -- Verifies if the string is from Echo()
+177.	                          if line_type = '$' then 
+178.	                                  write(file_line, line_type);
+179.	                                  line_length := line_length + 1;
+180.	                                  CS <= S1;
+181.	                          
+182.	                          -- Writes the string to the file
+183.	                          else                                                                    
+184.	                                  str(4) := character'val(conv_integer(control_data_out_debug(7 downto 0)));
+185.	                                  str(3) := character'val(conv_integer(control_data_out_debug(15 downto 8)));
+186.	                                  str(2) := character'val(conv_integer(control_data_out_debug(23 downto 16)));
+187.	                                  str(1) := character'val(conv_integer(control_data_out_debug(31 downto 24)));
+188.	                                  
+189.	                                  str_end := false;
+190.	                                  
+191.	                                  for i in 1 to 4 loop                                                            
+192.	                                          -- Writes a string in the line
+193.	                                          if str(i) /= lf and str(i) /= nul and not str_end then
+194.	                                                  write(file_line, str(i));
+195.	                                                  line_length := line_length + 1;
+196.	                                  
+197.	                                          -- Detects the string end
+198.	                                          elsif str(i) = nul then
+199.	                                                  str_end := true;
+200.	                                          
+201.	                                          -- Line feed detected. Writes the line in the file
+202.	                                          elsif str(i) = lf then                                                              
+203.	                                                  writeline(store_file, file_line);
+204.	                                                  line_length := 0;
+205.	                                          end if;
+206.	                                  end loop;
+207.	                          end if;
+208.	                                                                  
+209.	                  -- Receives from plasma the source processor, source task and writes them to the file
+210.	                  when S1 =>
+211.	                          write(file_line, ',');
+212.	                          write(file_line, conv_integer(control_data_out_debug(7 downto 0)));                                                             
+213.	                          line_length := line_length + 1;
+214.	                          
+215.	                          if line_length = 3 then 
+216.	                                  write(file_line, ',');
+217.	                                  CS <= S0;
+218.	                          else
+219.	                                  CS <= S1;
+220.	                          end if;
+221.	               end case;
+222.	        end if;
+223.	      end process;
+224.	
+225.	end test_bench;

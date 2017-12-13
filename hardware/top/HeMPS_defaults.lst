@@ -1,0 +1,348 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  HeMPS_defaults.vhd
+10.	--
+11.	--  Brief description:  Functions and constants for NoC generation.
+12.	--
+13.	------------------------------------------------------------------------------------------------
+14.	
+15.	library IEEE;
+16.	use IEEE.Std_Logic_1164.all;
+17.	use IEEE.std_logic_unsigned.all;
+18.	use IEEE.std_logic_arith.all;
+19.	use work.HeMPS_PKG.all;
+20.	
+21.	package HeMPS_defaults is
+22.	
+23.	--------------------------------------------------------
+24.	-- HERMES CONSTANTS
+25.	--------------------------------------------------------
+26.	
+27.	--------------------------------------------------------------------------------
+28.	-- Router position constants - FIXED - it is not a function of the NoC size
+29.	--------------------------------------------------------------------------------
+30.	        constant BL: integer := 0;
+31.	        constant BC: integer := 1;
+32.	        constant BR: integer := 2;
+33.	        constant CL: integer := 3;
+34.	        constant CC: integer := 4;
+35.	        constant CRX: integer := 5; 
+36.	        constant TL: integer := 6;
+37.	        constant TC: integer := 7;
+38.	        constant TR: integer := 8;
+39.	
+40.	---------------------------------------------------------
+41.	-- CONSTANTS INDEPENDENTES
+42.	---------------------------------------------------------
+43.	        constant NPORT: integer := 5;
+44.	
+45.	        constant EAST: integer := 0;
+46.	        constant WEST: integer := 1;
+47.	        constant NORTH : integer := 2;
+48.	        constant SOUTH : integer := 3;
+49.	        constant LOCAL : integer := 4;
+50.	
+51.	---------------------------------------------------------
+52.	-- CONSTANT DEPENDENTE DA LARGURA DE BANDA DA REDE - FIXED FOR HEMPS
+53.	---------------------------------------------------------
+54.	        constant TAM_FLIT : integer range 1 to 64 := 32;
+55.	        constant METADEFLIT : integer range 1 to 32 := (TAM_FLIT/2);
+56.	        constant QUARTOFLIT : integer range 1 to 16 := (TAM_FLIT/4);
+57.	
+58.	---------------------------------------------------------
+59.	-- CONSTANTS DEPENDENTES DA PROFUNDIDADE DA FILA
+60.	---------------------------------------------------------
+61.	        constant TAM_BUFFER: integer := 1024;
+62.	        constant TAM_BUFFER_DMNI: integer := 1024;
+63.	        constant TAM_POINTER : integer range 1 to 32 := 10;
+64.	
+65.	---------------------------------------------------------
+66.	-- CONSTANTS DEPENDENTES DO NUMERO DE ROTEADORES
+67.	---------------------------------------------------------
+68.	        constant NROT: integer := NUMBER_PROCESSORS;
+69.	
+70.	        constant MIN_X : integer := 0;
+71.	        constant MIN_Y : integer := 0;
+72.	        constant MAX_X : integer := NUMBER_PROCESSORS_X-1;
+73.	        constant MAX_Y : integer := NUMBER_PROCESSORS_Y-1;
+74.	
+75.	---------------------------------------------------------
+76.	-- CONSTANT TB
+77.	---------------------------------------------------------
+78.	        constant TAM_LINHA : integer := 2; --4;
+79.	
+80.	-- SUBTIPOS, TIPOS E FUNCOES
+81.	---------------------------------------------------------
+82.	
+83.	        subtype reg3 is std_logic_vector(2 downto 0);
+84.	        subtype reg8 is std_logic_vector(7 downto 0);
+85.	        subtype reg30 is std_logic_vector(29 downto 0); 
+86.	        subtype reg32 is std_logic_vector(31 downto 0); 
+87.	        subtype regNrot is std_logic_vector((NROT-1) downto 0);
+88.	        subtype regNport is std_logic_vector((NPORT-1) downto 0); 
+89.	        subtype regflit is std_logic_vector((TAM_FLIT-1) downto 0); 
+90.	        subtype regmetadeflit is std_logic_vector((METADEFLIT-1) downto 0); 
+91.	        subtype regquartoflit is std_logic_vector((QUARTOFLIT-1) downto 0);
+92.	        subtype pointer is std_logic_vector((TAM_POINTER-1) downto 0);
+93.	        subtype regNPe is std_logic_vector((NUMBER_PROCESSORS - 1) downto 0);
+94.	
+95.	        type buff is array(0 to TAM_BUFFER-1) of regflit;
+96.	        type buff_dmni is array(0 to TAM_BUFFER_DMNI-1) of regflit;
+97.	
+98.	
+99.	        type arrayNport_reg3 is array((NPORT-1) downto 0) of reg3;
+100.	        type arrayNport_reg8 is array((NPORT-1) downto 0) of reg8;
+101.	        type arrayNport_regflit is array((NPORT-1) downto 0) of regflit; 
+102.	        type arrayNrot_reg3 is array((NROT-1) downto 0) of reg3;
+103.	        type arrayNrot_regflit is array((NROT-1) downto 0) of regflit;
+104.	        type arrayNrot_regmetadeflit is array((NROT-1) downto 0) of regmetadeflit; 
+105.	        type arrayNPe_reg32 is array((NUMBER_PROCESSORS -1) downto 0) of reg32;
+106.	        type arrayNPe_reg30 is array((NUMBER_PROCESSORS -1) downto 0) of reg30;
+107.	
+108.	        -- number of ports of the processing_element - 4 - north/south/west/east
+109.	        type arrayNPORT_1_regflit is array(3 downto 0) of regflit;
+110.	
+111.		type arrayNregflit is array(natural range <>) of regflit;
+112.	
+113.	---------------------------------------------------------
+114.	---------------------------------------------------------
+115.	---------------------------------------------------------
+116.	-- HERMES FUCTIONS 
+117.	---------------------------------------------------------
+118.	        Function CONV_VECTOR( int: integer ) return std_logic_vector;
+119.	        function CONV_VECTOR( letra : string(1 to TAM_LINHA);  pos: integer ) return std_logic_vector;
+120.	        function CONV_HEX( int : integer ) return string;
+121.	        function CONV_STRING_4BITS( dado : std_logic_vector(3 downto 0)) return string; 
+122.	        function CONV_STRING_8BITS( dado : std_logic_vector(7 downto 0)) return string; 
+123.	        function CONV_STRING_16BITS( dado : std_logic_vector(15 downto 0)) return string;
+124.	        function CONV_STRING_32BITS( dado : std_logic_vector(31 downto 0)) return string;
+125.	
+126.	---------------------------------------------------------
+127.	-- HEMPS FUCTIONS
+128.	---------------------------------------------------------
+129.	        function RouterPosition(router: integer) return integer;
+130.	        function RouterAddress(router: integer) return std_logic_vector; 
+131.	        function log_filename(i: integer) return string;
+132.	      	function log_filename_tx(i: integer) return string; 
+133.	      	function log_filename_comm_tx(i: integer) return string; 
+134.	
+135.	end HeMPS_defaults;
+136.	
+137.	package body HeMPS_defaults is 
+138.	        --
+139.	        -- converte um inteiro em um std_logic_vector(2 downto 0) 
+140.	        --
+141.	        function CONV_VECTOR( int: integer ) return std_logic_vector is
+142.	                variable bin: reg3;
+143.	        begin 
+144.	                case(int) is
+145.	                        when 0 => bin := "000";
+146.	                        when 1 => bin := "001";
+147.	                        when 2 => bin := "010";
+148.	                        when 3 => bin := "011";
+149.	                        when 4 => bin := "100";
+150.	                        when 5 => bin := "101";
+151.	                        when 6 => bin := "110";
+152.	                        when 7 => bin := "111";
+153.	                        when others => bin := "000";
+154.	                end case;
+155.	                return bin; 
+156.	        end CONV_VECTOR;
+157.	        --------------------------------------------------------- 
+158.	        -- FUNCOES TB
+159.	        --------------------------------------------------------- 
+160.	        --
+161.	        -- converte um caracter de uma dada linha em um std_logic_vector 
+162.	        --
+163.	        function CONV_VECTOR( letra:string(1 to TAM_LINHA);pos: integer ) return std_logic_vector is
+164.	                variable bin: std_logic_vector(3 downto 0); 
+165.	        begin 
+166.	                case (letra(pos)) is
+167.	                        when '0' => bin := "0000";
+168.	                        when '1' => bin := "0001";
+169.	                        when '2' => bin := "0010";
+170.	                        when '3' => bin := "0011";
+171.	                        when '4' => bin := "0100";
+172.	                        when '5' => bin := "0101";
+173.	                        when '6' => bin := "0110";
+174.	                        when '7' => bin := "0111";
+175.	                        when '8' => bin := "1000";
+176.	                        when '9' => bin := "1001";
+177.	                        when 'A' => bin := "1010";
+178.	                        when 'B' => bin := "1011";
+179.	                        when 'C' => bin := "1100";
+180.	                        when 'D' => bin := "1101";
+181.	                        when 'E' => bin := "1110";
+182.	                        when 'F' => bin := "1111";
+183.	                        when others =>bin := "0000";
+184.	                end case;
+185.	                return bin; 
+186.	        end CONV_VECTOR;
+187.	
+188.	-- converte um inteiro em um string 
+189.	        function CONV_HEX( int: integer ) return string is
+190.	                variable str: string(1 to 1);
+191.	        begin 
+192.	                case(int) is
+193.	                        when 0 => str := "0";
+194.	                        when 1 => str := "1";
+195.	                        when 2 => str := "2";
+196.	                        when 3 => str := "3";
+197.	                        when 4 => str := "4";
+198.	                        when 5 => str := "5";
+199.	                        when 6 => str := "6";
+200.	                        when 7 => str := "7";
+201.	                        when 8 => str := "8";
+202.	                        when 9 => str := "9";
+203.	                        when 10 => str := "A";
+204.	                        when 11 => str := "B";
+205.	                        when 12 => str := "C";
+206.	                        when 13 => str := "D";
+207.	                        when 14 => str := "E";
+208.	                        when 15 => str := "F";
+209.	                        when others =>str := "U";
+210.	                end case;
+211.	                return str; 
+212.	        end CONV_HEX;
+213.	
+214.	        function CONV_STRING_4BITS(dado : std_logic_vector(3 downto 0)) return string is
+215.	                variable str: string(1 to 1);
+216.	        begin 
+217.	                str := CONV_HEX(CONV_INTEGER(dado));
+218.	                return str; 
+219.	        end CONV_STRING_4BITS; 
+220.	
+221.	        function CONV_STRING_8BITS(dado : std_logic_vector(7 downto 0)) return string is
+222.	                variable str1,str2: string(1 to 1);
+223.	                variable str: string(1 to 2);
+224.	        begin 
+225.	                str1 := CONV_STRING_4BITS(dado(7 downto 4));
+226.	                str2 := CONV_STRING_4BITS(dado(3 downto 0));
+227.	                str := str1 & str2;
+228.	                return str; 
+229.	        end CONV_STRING_8BITS; 
+230.	
+231.	        function CONV_STRING_16BITS(dado : std_logic_vector(15 downto 0)) return string is
+232.	                variable str1,str2: string(1 to 2);
+233.	                variable str: string(1 to 4);
+234.	        begin 
+235.	                str1 := CONV_STRING_8BITS(dado(15 downto 8));
+236.	                str2 := CONV_STRING_8BITS(dado(7 downto 0));
+237.	                str := str1 & str2;
+238.	                return str; 
+239.	        end CONV_STRING_16BITS;
+240.	
+241.	        function CONV_STRING_32BITS(dado : std_logic_vector(31 downto 0)) return string is
+242.	                variable str1,str2: string(1 to 4);
+243.	                variable str: string(1 to 8);
+244.	        begin 
+245.	                str1 := CONV_STRING_16BITS(dado(31 downto 16));
+246.	                str2 := CONV_STRING_16BITS(dado(15 downto 0));
+247.	                str := str1 & str2;
+248.	                return str; 
+249.	        end CONV_STRING_32BITS;
+250.	
+251.	                -- Returns the router position in the mesh
+252.	        -- BR: Botton Right
+253.	        -- BL: Botton Left
+254.	        -- TR: Top Right
+255.	        -- TL: Top Left 
+256.	        -- CRX: Center Right 
+257.	        -- CL: Center Left
+258.	        -- CC: Center
+259.	        -- 4x4 positions exemple
+260.	        --              TL TC TC TR
+261.	        --              CL CC CC CRX 
+262.	        --              CL CC CC CRX 
+263.	        --              BL BC BC BR
+264.	        function RouterPosition(router: integer) return integer is
+265.	                variable pos: integer range 0 to TR;
+266.	                variable line, column: integer;
+267.	                begin
+268.	                        
+269.	                        --line := router/NUMBER_PROCESSORS_Y;
+270.	                        column := router mod NUMBER_PROCESSORS_X;
+271.	                        
+272.	                        if router >= NUMBER_PROCESSORS-NUMBER_PROCESSORS_X then --TOP 
+273.	                                if column = NUMBER_PROCESSORS_X-1 then --RIGHT
+274.	                                        pos := TR;
+275.	                                elsif column = 0 then--LEFT
+276.	                                        pos := TL;
+277.	                                else--CENTER_X
+278.	                                        pos := TC;
+279.	                                end if;
+280.	                        elsif router < NUMBER_PROCESSORS_X then --BOTTOM
+281.	                                if column = NUMBER_PROCESSORS_X-1 then --RIGHT
+282.	                                        pos := BR;
+283.	                                elsif column = 0 then--LEFT
+284.	                                        pos := BL;
+285.	                                else--CENTER_X
+286.	                                        pos := BC;
+287.	                                end if;
+288.	                        else --CENTER_Y
+289.	                                if column = NUMBER_PROCESSORS_X-1 then --RIGHT
+290.	                                        pos := CRX; 
+291.	                                elsif column = 0 then--LEFT
+292.	                                        pos := CL;
+293.	                                else--CENTER_X
+294.	                                        pos := CC;
+295.	                                end if;
+296.	                        end if; 
+297.	                        
+298.	                        return pos;
+299.	                        
+300.	        end RouterPosition;
+301.	
+302.	        function RouterAddress(router: integer) return std_logic_vector is
+303.	                variable pos_x, pos_y   : regquartoflit; 
+304.	                variable addr                   : regmetadeflit; 
+305.	                variable aux                    : integer;
+306.	        begin 
+307.	                aux := (router/NUMBER_PROCESSORS_X);
+308.	                pos_x := conv_std_logic_vector((router mod NUMBER_PROCESSORS_X),QUARTOFLIT);
+309.	                pos_y := conv_std_logic_vector(aux,QUARTOFLIT); 
+310.	                
+311.	                addr := pos_x & pos_y;
+312.	                return addr;
+313.	        end RouterAddress;
+314.	        
+315.	        function log_filename(i: integer) return string is
+316.	                variable filename               : string(1 to 17);
+317.	                variable aux_x                  : integer;
+318.	                variable aux_y                  : integer;
+319.	        begin
+320.	                aux_x := (i mod NUMBER_PROCESSORS_X);
+321.	                aux_y := (i/NUMBER_PROCESSORS_X);
+322.	                filename := "log/output" & CONV_HEX(aux_x) & "x" & CONV_HEX(aux_y)  & ".txt";
+323.	                return filename;
+324.	        end log_filename;
+325.	
+326.	       function log_filename_tx(i: integer) return string is
+327.	                variable filename               : string(1 to 21);
+328.	                variable aux_x                  : integer;
+329.	                variable aux_y                  : integer;
+330.	        begin
+331.	                aux_x := (i mod NUMBER_PROCESSORS_X);
+332.	                aux_y := (i/NUMBER_PROCESSORS_X);
+333.	                filename := "log/output_tx_" & CONV_HEX(aux_x) & "x" & CONV_HEX(aux_y)  & ".txt";
+334.	                return filename;
+335.	        end log_filename_tx;
+336.	
+337.	        function log_filename_comm_tx(i: integer) return string is
+338.	                variable filename               : string(1 to 23);
+339.	                variable aux_x                  : integer;
+340.	                variable aux_y                  : integer;
+341.	        begin
+342.	                aux_x := (i mod NUMBER_PROCESSORS_X);
+343.	                aux_y := (i/NUMBER_PROCESSORS_X);
+344.	                filename := "log/output_c_tx_" & CONV_HEX(aux_x) & "x" & CONV_HEX(aux_y)&".txt";
+345.	                return filename;
+346.	        end log_filename_comm_tx;
+347.	
+348.	end HeMPS_defaults;

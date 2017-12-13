@@ -1,0 +1,181 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  processing_element.vhd
+10.	--
+11.	--  Brief description:  Generate processing element.
+12.	--
+13.	------------------------------------------------------------------------------------------------
+14.	
+15.	library ieee;
+16.	use work.HeMPS_defaults.all;
+17.	use ieee.std_logic_1164.all;
+18.	
+19.	entity processing_element is
+20.	        generic(
+21.	                memory_type             : string := "XIL"; -- "TRI_PORT_X"
+22.	                core_type               : string := "plasma";
+23.	                mlite_description       : string := "RTL";
+24.	                ram_description         : string := "RTL";
+25.	                router_description      : string := "RTL";
+26.	                log_file                : string := "UNUSED";
+27.	                router_address          : regmetadeflit;
+28.	                is_master               :  std_logic := '0'
+29.	        );
+30.	        port(
+31.	                address_sc              : in regmetadeflit;
+32.	
+33.	                -- Noc Ports
+34.	                clock                   : in  std_logic;
+35.	                reset                   : in  std_logic;
+36.	
+37.	                clock_rx                : in  std_logic_vector(3 downto 0);
+38.	                rx                      : in  std_logic_vector(3 downto 0);
+39.	                data_in                 : in  arrayNPORT_1_regflit;
+40.	                credit_o                : out std_logic_vector(3 downto 0);
+41.	                clock_tx                : out std_logic_vector(3 downto 0);
+42.	                tx                      : out std_logic_vector(3 downto 0);
+43.	                data_out                : out arrayNPORT_1_regflit;
+44.	                credit_i                : in  std_logic_vector(3 downto 0);
+45.	
+46.	                -- External Memory
+47.	                address                 : out std_logic_vector(31 downto 2);
+48.	                data_read               : in  std_logic_vector(31 downto 0);
+49.	                
+50.	                -- Debug MC
+51.	                write_enable_debug      : out  std_logic;
+52.	                data_out_debug          : out  std_logic_vector(31 downto 0);
+53.	                busy_debug              : in std_logic;
+54.	                
+55.	                ack_app                 : out  std_logic;
+56.	                req_app                 : in  std_logic_vector(31 downto 0)
+57.	        );
+58.	end processing_element;
+59.	
+60.	architecture processing_element of processing_element is
+61.	
+62.	        -- NoC Interface
+63.	        signal clock_tx_pe      : std_logic;
+64.	        signal tx_pe            : std_logic;
+65.	        signal data_out_pe      : regflit;
+66.	        signal credit_i_pe      : std_logic;
+67.	        signal clock_rx_pe      : std_logic;
+68.	        signal rx_pe            : std_logic;
+69.	        signal data_in_pe       : regflit;
+70.	        signal credit_o_pe      : std_logic;
+71.	
+72.	        signal clock_rx_CC      : regNport;
+73.	        signal rx_CC            : regNport;
+74.	        signal data_in_CC       : arrayNport_regflit;
+75.	        signal credit_o_CC      : regNport;
+76.	        signal clock_tx_CC      : regNport;
+77.	        signal tx_CC            : regNport;
+78.	        signal data_out_CC      : arrayNport_regflit;
+79.	        signal credit_i_CC      : regNport;
+80.	        
+81.	        signal sys_int_i        : std_logic;
+82.	        
+83.	begin
+84.	
+85.	-------------------
+86.	-------------------
+87.	--begin Router CC--
+88.	-------------------
+89.	-------------------
+90.	        
+91.	        ROUTER_RTL:if router_description = "RTL" generate               
+92.	                routerCC : Entity work.RouterCC
+93.	                generic map( address => router_address )
+94.	                        port map(
+95.	                                clock           => clock,
+96.	                                reset           => reset,
+97.	                                clock_rx        => clock_rx_CC,
+98.	                                rx                      => rx_CC,
+99.	                                data_in         => data_in_CC,
+100.	                                credit_o        => credit_o_CC,
+101.	                                clock_tx        => clock_tx_CC,
+102.	                                tx                      => tx_CC,
+103.	                                data_out        => data_out_CC,
+104.	                                credit_i        => credit_i_CC
+105.	                        );
+106.	        end generate;
+107.	
+108.	-------------------
+109.	-------------------
+110.	--end  Router  CC--
+111.	-------------------
+112.	-------------------
+113.	
+114.	        -- connecting east, weast, north and south ports to the inputs and outputs
+115.	        clock_rx_CC(3 downto 0)         <= clock_rx;
+116.	        rx_CC(3 downto 0)               <= rx;
+117.	        data_in_CC                      <= ( 4 => data_out_pe,  3 => data_in(3),  2 => data_in(2),  1 => data_in(1),  0 => data_in(0));
+118.	
+119.	        --(others=>(others=>'0'));
+120.	
+121.	        credit_o                        <= credit_o_CC(3 downto 0);
+122.	        clock_tx                        <= clock_tx_CC(3 downto 0);
+123.	        tx                              <= tx_CC(3 downto 0);
+124.	        data_out                        <= ( 3 => data_out_CC(3), 2 => data_out_CC(2), 1 => data_out_CC(1), 0 => data_out_CC(0));
+125.	        credit_i_CC(3 downto 0) <= credit_i;
+126.	
+127.	        -- connecting local port to plasma
+128.	        clock_rx_CC(LOCAL)              <= clock_tx_pe;
+129.	        rx_CC(LOCAL)                    <= tx_pe;
+130.	       -- data_in_CC(LOCAL)               <= data_out_pe;
+131.	        credit_i_pe                     <= credit_o_CC(LOCAL);
+132.	        clock_rx_pe                     <= clock_tx_CC(LOCAL);
+133.	        rx_pe                           <= tx_CC(LOCAL);
+134.	        data_in_pe                      <= data_out_CC(LOCAL);
+135.	        credit_i_CC(LOCAL)              <= credit_o_pe;
+136.	
+137.	-------------------
+138.	-------------------
+139.	--begin  Plasma  --
+140.	-------------------
+141.	-------------------
+142.	        PE_PLASMA: if core_type = "plasma" generate
+143.	                plasma: entity work.plasma
+144.	                        generic map (
+145.	                                memory_type                     => "TRI",
+146.	                                mlite_description       => mlite_description,
+147.	                                ram_description         => ram_description,
+148.	                                log_file                        => log_file,
+149.	                                router_address          => router_address,
+150.	                                is_master               => is_master
+151.	                        )
+152.	                        port map(
+153.	                                clock                           => clock,
+154.	                                reset                           => reset,
+155.	                                clock_tx                        => clock_tx_pe,
+156.	                                tx                                      => tx_pe,
+157.	                                data_out                        => data_out_pe,
+158.	                                credit_i                        => credit_i_pe,
+159.	                                clock_rx                        => clock_rx_pe,
+160.	                                rx                                      => rx_pe,
+161.	                                data_in                         => data_in_pe,
+162.	                                credit_o                        => credit_o_pe,
+163.	        
+164.	                                address                         => address,
+165.	                                data_read                       => data_read,
+166.	
+167.	                                write_enable_debug      => write_enable_debug,
+168.	                                data_out_debug          => data_out_debug,
+169.	                                busy_debug                      => busy_debug,
+170.	                                
+171.	                                ack_app                        => ack_app,
+172.	                                req_app                        => req_app
+173.	                        );
+174.	        end generate;
+175.	        
+176.	-------------------
+177.	-------------------
+178.	--  end  Plasma  --
+179.	-------------------
+180.	-------------------
+181.	end architecture processing_element;

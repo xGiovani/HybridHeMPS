@@ -1,0 +1,119 @@
+1.	------------------------------------------------------------------------------------------------
+2.	--
+3.	--  DISTRIBUTED HEMPS  - version 5.0
+4.	--
+5.	--  Research group: GAPH-PUCRS    -    contact   fernando.moraes@pucrs.br
+6.	--
+7.	--  Distribution:  September 2013
+8.	--
+9.	--  Source name:  access_repository.vhd
+10.	--
+11.	--  Brief description:  State machine for controlling access to the repository.
+12.	--
+13.	------------------------------------------------------------------------------------------------
+14.	
+15.	library ieee;
+16.	use ieee.std_logic_1164.all;
+17.	use ieee.std_logic_arith.all;
+18.	
+19.	entity access_repository is
+20.		port (
+21.			clock			: in  std_logic;
+22.			reset			: in  std_logic;
+23.			--access to repository in ddr2
+24.			read_req		: out std_logic;
+25.			address			: out std_logic_vector(31 downto 2);
+26.			data_valid		: in  std_logic;
+27.			data_read		: in  std_logic_vector(31 downto 0);
+28.			--dma acess
+29.			mem_ddr_access		: in  std_logic;
+30.			dma_mem_addr_ddr	: in  std_logic_vector(31 downto 0);
+31.			dma_mem_ddr_read_req	: in  std_logic;
+32.			--plasma interface
+33.			cpu_mem_address		: in  std_logic_vector(31 downto 0);
+34.			cpu_mem_address_reg	: in  std_logic_vector(31 downto 0);
+35.			mem_hold		: out std_logic;
+36.			data_read_reg		: out std_logic_vector(31 downto 0)
+37.		);
+38.	end entity access_repository;
+39.	
+40.	architecture access_repository of access_repository is
+41.		type state is (wait_addr, set_req, wait_data, set_done, dma_access);
+42.		signal ea, pe : state;
+43.	begin
+44.		process(clock, reset)
+45.		begin
+46.			if reset = '1' then
+47.				ea <= wait_addr;
+48.				mem_hold <= '0';
+49.				read_req <= '0';
+50.				address <= (others => '0');
+51.				data_read_reg <= (others => '0');
+52.			elsif rising_edge(clock) then
+53.				ea <= pe;
+54.				--data_read registered to dma
+55.				if data_valid = '1' then
+56.					data_read_reg <= data_read;
+57.				end if;
+58.				
+59.				case ea is
+60.				when wait_addr =>
+61.					if (cpu_mem_address(30 downto 28) = "001") then
+62.						mem_hold <= '1';
+63.					elsif mem_ddr_access = '1' then
+64.						read_req <= '1';
+65.						address <= dma_mem_addr_ddr(31 downto 2);
+66.						mem_hold <= '0';
+67.					end if;
+68.				when set_req =>
+69.					address <= cpu_mem_address_reg(31 downto 2);
+70.					read_req <= '1';
+71.				when wait_data =>
+72.					address <= cpu_mem_address_reg(31 downto 2);
+73.					if(data_valid = '1') then
+74.						mem_hold <= '0';
+75.						read_req <= '0';
+76.					else
+77.						read_req <= '1';
+78.					end if;
+79.				when dma_access =>
+80.					read_req <= dma_mem_ddr_read_req;
+81.					address <= dma_mem_addr_ddr(31 downto 2);
+82.				when set_done =>
+83.					read_req <= '0';
+84.					
+85.				end case;
+86.			end if;
+87.		end process;
+88.	
+89.		process(ea,cpu_mem_address,data_valid,mem_ddr_access)
+90.		begin
+91.			case ea is
+92.			when wait_addr =>
+93.				if(cpu_mem_address(30 downto 28) = "001") then
+94.					pe <= set_req;
+95.				elsif mem_ddr_access = '1' then
+96.					pe <= dma_access;
+97.				else
+98.					pe <= wait_addr;
+99.				end if;
+100.			when set_req =>
+101.				pe <= wait_data;
+102.			when wait_data =>
+103.				if(data_valid = '1') then
+104.					pe <= set_done;
+105.				else
+106.					pe <= wait_data;
+107.				end if;
+108.			when dma_access =>
+109.				if mem_ddr_access = '1' then
+110.					pe <= dma_access;
+111.				else
+112.					pe <= set_done;
+113.				end if;
+114.			when set_done =>
+115.				pe <= wait_addr;
+116.			end case;
+117.		end process;
+118.	
+119.	end architecture;

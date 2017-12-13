@@ -1,0 +1,579 @@
+1.	library ieee;
+2.	use ieee.std_logic_1164.all;
+3.	use std.textio.all;
+4.	
+5.	package txt_util is
+6.	
+7.	    -- prints a message to the screen
+8.	    procedure print(text: string);
+9.	
+10.	    -- prints the message when active
+11.	    -- useful for debug switches
+12.	    procedure print(active: boolean; text: string);
+13.	
+14.	    -- converts std_logic into a character
+15.	    function chr(sl: std_logic) return character;
+16.	
+17.	    -- converts std_logic into a string (1 to 1)
+18.	    function str(sl: std_logic) return string;
+19.	
+20.	    -- converts std_logic_vector into a string (binary base)
+21.	    function str(slv: std_logic_vector) return string;
+22.	
+23.	    -- converts boolean into a string
+24.	    function str(b: boolean) return string;
+25.	
+26.	    -- converts an integer into a single character
+27.	    -- (can also be used for hex conversion and other bases)
+28.	    function chr(int: integer) return character;
+29.	
+30.	    -- converts integer into string using specified base
+31.	    function str(int: integer; base: integer) return string;
+32.	
+33.	    -- converts integer to string, using base 10
+34.	    function str(int: integer) return string;
+35.	
+36.	    -- convert std_logic_vector into a string in hex format
+37.	    function hstr(slv: std_logic_vector) return string;
+38.	
+39.	
+40.	    -- functions to manipulate strings
+41.	    -----------------------------------
+42.	
+43.	    -- convert a character to upper case
+44.	    function to_upper(c: character) return character;
+45.	
+46.	    -- convert a character to lower case
+47.	    function to_lower(c: character) return character;
+48.	
+49.	    -- convert a string to upper case
+50.	    function to_upper(s: string) return string;
+51.	
+52.	    -- convert a string to lower case
+53.	    function to_lower(s: string) return string;
+54.	
+55.	   
+56.	    
+57.	    -- functions to convert strings into other formats
+58.	    --------------------------------------------------
+59.	    
+60.	    -- converts a character into std_logic
+61.	    function to_std_logic(c: character) return std_logic; 
+62.	    
+63.	    -- converts a string into std_logic_vector
+64.	    function to_std_logic_vector(s: string) return std_logic_vector; 
+65.	
+66.	
+67.	  
+68.	    -- file I/O
+69.	    -----------
+70.	       
+71.	    -- read variable length string from input file
+72.	    procedure str_read(file in_file: TEXT; 
+73.	                       res_string: out string);
+74.	        
+75.	    -- print string to a file and start new line
+76.	    procedure print(file out_file: TEXT;
+77.	                    new_string: in  string);
+78.	    
+79.	    -- print character to a file and start new line
+80.	    procedure print(file out_file: TEXT;
+81.	                    char:       in  character);
+82.	                    
+83.	end txt_util;
+84.	
+85.	
+86.	
+87.	
+88.	package body txt_util is
+89.	
+90.	
+91.	
+92.	
+93.	   -- prints text to the screen
+94.	
+95.	   procedure print(text: string) is
+96.	     variable msg_line: line;
+97.	     begin
+98.	       write(msg_line, text);
+99.	       writeline(output, msg_line);
+100.	   end print;
+101.	
+102.	
+103.	
+104.	
+105.	   -- prints text to the screen when active
+106.	
+107.	   procedure print(active: boolean; text: string)  is
+108.	     begin
+109.	      if active then
+110.	         print(text);
+111.	      end if;
+112.	   end print;
+113.	
+114.	
+115.	   -- converts std_logic into a character
+116.	
+117.	   function chr(sl: std_logic) return character is
+118.	    variable c: character;
+119.	    begin
+120.	      case sl is
+121.	         when 'U' => c:= 'U';
+122.	         when 'X' => c:= 'X';
+123.	         when '0' => c:= '0';
+124.	         when '1' => c:= '1';
+125.	         when 'Z' => c:= 'Z';
+126.	         when 'W' => c:= 'W';
+127.	         when 'L' => c:= 'L';
+128.	         when 'H' => c:= 'H';
+129.	         when '-' => c:= '-';
+130.	      end case;
+131.	    return c;
+132.	   end chr;
+133.	
+134.	
+135.	
+136.	   -- converts std_logic into a string (1 to 1)
+137.	
+138.	   function str(sl: std_logic) return string is
+139.	    variable s: string(1 to 1);
+140.	    begin
+141.	        s(1) := chr(sl);
+142.	        return s;
+143.	   end str;
+144.	
+145.	
+146.	
+147.	   -- converts std_logic_vector into a string (binary base)
+148.	   -- (this also takes care of the fact that the range of
+149.	   --  a string is natural while a std_logic_vector may
+150.	   --  have an integer range)
+151.	
+152.	   function str(slv: std_logic_vector) return string is
+153.	     variable result : string (1 to slv'length);
+154.	     variable r : integer;
+155.	   begin
+156.	     r := 1;
+157.	     for i in slv'range loop
+158.	        result(r) := chr(slv(i));
+159.	        r := r + 1;
+160.	     end loop;
+161.	     return result;
+162.	   end str;
+163.	
+164.	
+165.	   function str(b: boolean) return string is
+166.	
+167.	    begin
+168.	       if b then
+169.	          return "true";
+170.	      else
+171.	        return "false";
+172.	       end if;
+173.	    end str;
+174.	
+175.	
+176.	   -- converts an integer into a character
+177.	   -- for 0 to 9 the obvious mapping is used, higher
+178.	   -- values are mapped to the characters A-Z
+179.	   -- (this is usefull for systems with base > 10)
+180.	   -- (adapted from Steve Vogwell's posting in comp.lang.vhdl)
+181.	
+182.	   function chr(int: integer) return character is
+183.	    variable c: character;
+184.	   begin
+185.	        case int is
+186.	          when  0 => c := '0';
+187.	          when  1 => c := '1';
+188.	          when  2 => c := '2';
+189.	          when  3 => c := '3';
+190.	          when  4 => c := '4';
+191.	          when  5 => c := '5';
+192.	          when  6 => c := '6';
+193.	          when  7 => c := '7';
+194.	          when  8 => c := '8';
+195.	          when  9 => c := '9';
+196.	          when 10 => c := 'A';
+197.	          when 11 => c := 'B';
+198.	          when 12 => c := 'C';
+199.	          when 13 => c := 'D';
+200.	          when 14 => c := 'E';
+201.	          when 15 => c := 'F';
+202.	          when 16 => c := 'G';
+203.	          when 17 => c := 'H';
+204.	          when 18 => c := 'I';
+205.	          when 19 => c := 'J';
+206.	          when 20 => c := 'K';
+207.	          when 21 => c := 'L';
+208.	          when 22 => c := 'M';
+209.	          when 23 => c := 'N';
+210.	          when 24 => c := 'O';
+211.	          when 25 => c := 'P';
+212.	          when 26 => c := 'Q';
+213.	          when 27 => c := 'R';
+214.	          when 28 => c := 'S';
+215.	          when 29 => c := 'T';
+216.	          when 30 => c := 'U';
+217.	          when 31 => c := 'V';
+218.	          when 32 => c := 'W';
+219.	          when 33 => c := 'X';
+220.	          when 34 => c := 'Y';
+221.	          when 35 => c := 'Z';
+222.	          when others => c := '?';
+223.	        end case;
+224.	        return c;
+225.	    end chr;
+226.	
+227.	
+228.	
+229.	   -- convert integer to string using specified base
+230.	   -- (adapted from Steve Vogwell's posting in comp.lang.vhdl)
+231.	
+232.	   function str(int: integer; base: integer) return string is
+233.	
+234.	    variable temp:      string(1 to 10);
+235.	    variable num:       integer;
+236.	    variable abs_int:   integer;
+237.	    variable len:       integer := 1;
+238.	    variable power:     integer := 1;
+239.	
+240.	   begin
+241.	
+242.	    -- bug fix for negative numbers
+243.	    abs_int := abs(int);
+244.	
+245.	    num     := abs_int;
+246.	
+247.	    while num >= base loop                     -- Determine how many
+248.	      len := len + 1;                          -- characters required
+249.	      num := num / base;                       -- to represent the
+250.	    end loop ;                                 -- number.
+251.	
+252.	    for i in len downto 1 loop                 -- Convert the number to
+253.	      temp(i) := chr(abs_int/power mod base);  -- a string starting
+254.	      power := power * base;                   -- with the right hand
+255.	    end loop ;                                 -- side.
+256.	
+257.	    -- return result and add sign if required
+258.	    if int < 0 then
+259.	       return '-'& temp(1 to len);
+260.	     else
+261.	       return temp(1 to len);
+262.	    end if;
+263.	
+264.	   end str;
+265.	
+266.	
+267.	  -- convert integer to string, using base 10
+268.	  function str(int: integer) return string is
+269.	
+270.	   begin
+271.	
+272.	    return str(int, 10) ;
+273.	
+274.	   end str;
+275.	
+276.	
+277.	
+278.	   -- converts a std_logic_vector into a hex string.
+279.	   function hstr(slv: std_logic_vector) return string is
+280.	       variable hexlen: integer;
+281.	       variable longslv : std_logic_vector(67 downto 0) := (others => '0');
+282.	       variable hex : string(1 to 16);
+283.	       variable fourbit : std_logic_vector(3 downto 0);
+284.	     begin
+285.	       hexlen := (slv'left+1)/4;
+286.	       if (slv'left+1) mod 4 /= 0 then
+287.	         hexlen := hexlen + 1;
+288.	       end if;
+289.	       longslv(slv'left downto 0) := slv;
+290.	       for i in (hexlen -1) downto 0 loop
+291.	         fourbit := longslv(((i*4)+3) downto (i*4));
+292.	         case fourbit is
+293.	           when "0000" => hex(hexlen -I) := '0';
+294.	           when "0001" => hex(hexlen -I) := '1';
+295.	           when "0010" => hex(hexlen -I) := '2';
+296.	           when "0011" => hex(hexlen -I) := '3';
+297.	           when "0100" => hex(hexlen -I) := '4';
+298.	           when "0101" => hex(hexlen -I) := '5';
+299.	           when "0110" => hex(hexlen -I) := '6';
+300.	           when "0111" => hex(hexlen -I) := '7';
+301.	           when "1000" => hex(hexlen -I) := '8';
+302.	           when "1001" => hex(hexlen -I) := '9';
+303.	           when "1010" => hex(hexlen -I) := 'A';
+304.	           when "1011" => hex(hexlen -I) := 'B';
+305.	           when "1100" => hex(hexlen -I) := 'C';
+306.	           when "1101" => hex(hexlen -I) := 'D';
+307.	           when "1110" => hex(hexlen -I) := 'E';
+308.	           when "1111" => hex(hexlen -I) := 'F';
+309.	           when "ZZZZ" => hex(hexlen -I) := 'z';
+310.	           when "UUUU" => hex(hexlen -I) := 'u';
+311.	           when "XXXX" => hex(hexlen -I) := 'x';
+312.	           when others => hex(hexlen -I) := '?';
+313.	         end case;
+314.	       end loop;
+315.	       return hex(1 to hexlen);
+316.	     end hstr;
+317.	
+318.	
+319.	
+320.	   -- functions to manipulate strings
+321.	   -----------------------------------
+322.	
+323.	
+324.	   -- convert a character to upper case
+325.	
+326.	   function to_upper(c: character) return character is
+327.	
+328.	      variable u: character;
+329.	
+330.	    begin
+331.	
+332.	       case c is
+333.	        when 'a' => u := 'A';
+334.	        when 'b' => u := 'B';
+335.	        when 'c' => u := 'C';
+336.	        when 'd' => u := 'D';
+337.	        when 'e' => u := 'E';
+338.	        when 'f' => u := 'F';
+339.	        when 'g' => u := 'G';
+340.	        when 'h' => u := 'H';
+341.	        when 'i' => u := 'I';
+342.	        when 'j' => u := 'J';
+343.	        when 'k' => u := 'K';
+344.	        when 'l' => u := 'L';
+345.	        when 'm' => u := 'M';
+346.	        when 'n' => u := 'N';
+347.	        when 'o' => u := 'O';
+348.	        when 'p' => u := 'P';
+349.	        when 'q' => u := 'Q';
+350.	        when 'r' => u := 'R';
+351.	        when 's' => u := 'S';
+352.	        when 't' => u := 'T';
+353.	        when 'u' => u := 'U';
+354.	        when 'v' => u := 'V';
+355.	        when 'w' => u := 'W';
+356.	        when 'x' => u := 'X';
+357.	        when 'y' => u := 'Y';
+358.	        when 'z' => u := 'Z';
+359.	        when others => u := c;
+360.	    end case;
+361.	
+362.	      return u;
+363.	
+364.	   end to_upper;
+365.	
+366.	
+367.	   -- convert a character to lower case
+368.	
+369.	   function to_lower(c: character) return character is
+370.	
+371.	      variable l: character;
+372.	
+373.	    begin
+374.	
+375.	       case c is
+376.	        when 'A' => l := 'a';
+377.	        when 'B' => l := 'b';
+378.	        when 'C' => l := 'c';
+379.	        when 'D' => l := 'd';
+380.	        when 'E' => l := 'e';
+381.	        when 'F' => l := 'f';
+382.	        when 'G' => l := 'g';
+383.	        when 'H' => l := 'h';
+384.	        when 'I' => l := 'i';
+385.	        when 'J' => l := 'j';
+386.	        when 'K' => l := 'k';
+387.	        when 'L' => l := 'l';
+388.	        when 'M' => l := 'm';
+389.	        when 'N' => l := 'n';
+390.	        when 'O' => l := 'o';
+391.	        when 'P' => l := 'p';
+392.	        when 'Q' => l := 'q';
+393.	        when 'R' => l := 'r';
+394.	        when 'S' => l := 's';
+395.	        when 'T' => l := 't';
+396.	        when 'U' => l := 'u';
+397.	        when 'V' => l := 'v';
+398.	        when 'W' => l := 'w';
+399.	        when 'X' => l := 'x';
+400.	        when 'Y' => l := 'y';
+401.	        when 'Z' => l := 'z';
+402.	        when others => l := c;
+403.	    end case;
+404.	
+405.	      return l;
+406.	
+407.	   end to_lower;
+408.	
+409.	
+410.	
+411.	   -- convert a string to upper case
+412.	
+413.	   function to_upper(s: string) return string is
+414.	
+415.	     variable uppercase: string (s'range);
+416.	
+417.	   begin
+418.	
+419.	     for i in s'range loop
+420.	        uppercase(i):= to_upper(s(i));
+421.	     end loop;
+422.	     return uppercase;
+423.	
+424.	   end to_upper;
+425.	
+426.	
+427.	
+428.	   -- convert a string to lower case
+429.	
+430.	   function to_lower(s: string) return string is
+431.	
+432.	     variable lowercase: string (s'range);
+433.	
+434.	   begin
+435.	
+436.	     for i in s'range loop
+437.	        lowercase(i):= to_lower(s(i));
+438.	     end loop;
+439.	     return lowercase;
+440.	
+441.	   end to_lower;
+442.	
+443.	
+444.	
+445.	-- functions to convert strings into other types
+446.	
+447.	
+448.	-- converts a character into a std_logic
+449.	
+450.	function to_std_logic(c: character) return std_logic is 
+451.	    variable sl: std_logic;
+452.	    begin
+453.	      case c is
+454.	        when 'U' => 
+455.	           sl := 'U'; 
+456.	        when 'X' =>
+457.	           sl := 'X';
+458.	        when '0' => 
+459.	           sl := '0';
+460.	        when '1' => 
+461.	           sl := '1';
+462.	        when 'Z' => 
+463.	           sl := 'Z';
+464.	        when 'W' => 
+465.	           sl := 'W';
+466.	        when 'L' => 
+467.	           sl := 'L';
+468.	        when 'H' => 
+469.	           sl := 'H';
+470.	        when '-' => 
+471.	           sl := '-';
+472.	        when others =>
+473.	           sl := 'X'; 
+474.	    end case;
+475.	   return sl;
+476.	  end to_std_logic;
+477.	
+478.	
+479.	-- converts a string into std_logic_vector
+480.	
+481.	function to_std_logic_vector(s: string) return std_logic_vector is 
+482.	  variable slv: std_logic_vector(s'high-s'low downto 0);
+483.	  variable k: integer;
+484.	begin
+485.	   k := s'high-s'low;
+486.	  for i in s'range loop
+487.	     slv(k) := to_std_logic(s(i));
+488.	     k      := k - 1;
+489.	  end loop;
+490.	  return slv;
+491.	end to_std_logic_vector;                                       
+492.	                                       
+493.	                                       
+494.	                                       
+495.	                                       
+496.	                                       
+497.	                                       
+498.	----------------
+499.	--  file I/O  --
+500.	----------------
+501.	
+502.	
+503.	
+504.	-- read variable length string from input file
+505.	     
+506.	procedure str_read(file in_file: TEXT; 
+507.	                   res_string: out string) is
+508.	       
+509.	       variable l:         line;
+510.	       variable c:         character;
+511.	       variable is_string: boolean;
+512.	       
+513.	   begin
+514.	           
+515.	     readline(in_file, l);
+516.	     -- clear the contents of the result string
+517.	     for i in res_string'range loop
+518.	         res_string(i) := ' ';
+519.	     end loop;   
+520.	     -- read all characters of the line, up to the length  
+521.	     -- of the results string
+522.	     for i in res_string'range loop
+523.	        read(l, c, is_string);
+524.	        res_string(i) := c;
+525.	        if not is_string then -- found end of line
+526.	           exit;
+527.	        end if;   
+528.	     end loop; 
+529.	                     
+530.	end str_read;
+531.	
+532.	
+533.	-- print string to a file
+534.	procedure print(file out_file: TEXT;
+535.	                new_string: in  string) is
+536.	       
+537.	       variable l: line;
+538.	       
+539.	   begin
+540.	      
+541.	     write(l, new_string);
+542.	     writeline(out_file, l);
+543.	                     
+544.	end print;
+545.	
+546.	
+547.	-- print character to a file and start new line
+548.	procedure print(file out_file: TEXT;
+549.	                char: in  character) is
+550.	       
+551.	       variable l: line;
+552.	       
+553.	   begin
+554.	      
+555.	     write(l, char);
+556.	     writeline(out_file, l);
+557.	                     
+558.	end print;
+559.	
+560.	
+561.	
+562.	-- appends contents of a string to a file until line feed occurs
+563.	-- (LF is considered to be the end of the string)
+564.	
+565.	procedure str_write(file out_file: TEXT; 
+566.	                    new_string: in  string) is
+567.	 begin
+568.	      
+569.	   for i in new_string'range loop
+570.	      print(out_file, new_string(i));
+571.	      if new_string(i) = LF then -- end of string
+572.	         exit;
+573.	      end if;
+574.	   end loop;               
+575.	                     
+576.	end str_write;
+577.	
+578.	end txt_util;
+579.	

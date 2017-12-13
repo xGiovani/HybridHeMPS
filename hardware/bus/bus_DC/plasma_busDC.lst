@@ -1,0 +1,451 @@
+1.	library ieee;
+2.	use work.mlite_pack.all;                
+3.	use work.HeMPS_defaults.all;
+4.	use work.HemPS_PKG.all;
+5.	use ieee.std_logic_1164.all;
+6.	use ieee.std_logic_misc.all;
+7.	use ieee.std_logic_arith.all;
+8.	use ieee.std_logic_unsigned.all;
+9.	use ieee.std_logic_textio.all;
+10.	use ieee.math_real.all;
+11.	
+12.	use std.textio.all;
+13.	library unisim;
+14.	use unisim.vcomponents.all;
+15.	
+16.	entity plasma_busDC is
+17.	    generic 
+18.	    (
+19.	        memory_type         : string := "XIL"; -- "TRI_PORT_X"
+20.	      	router_address      : std_logic_vector(15 downto 0):= (others=>'0');
+21.	        mlite_description   : string := "RTL";
+22.	        ram_description     : string := "RTL";
+23.	        log_file            : string := "output.txt";
+24.	        is_master           : std_logic
+25.	    );
+26.	    port 
+27.	    (  
+28.	      	address_sc          : in regmetadeflit;
+29.	        clock               : in  std_logic;
+30.	        reset               : in  std_logic;
+31.	        -- Bus Interface
+32.	        tx                  : out std_logic;
+33.	        data_out            : out regflit;
+34.	        credit_i            : in  std_logic;
+35.	      	tx_addr             : out regflit;
+36.	        rx                  : in  std_logic;
+37.	        data_in             : in  regflit;
+38.	        credit_o            : out std_logic;
+39.		-- Bus Arbiter Interface
+40.		grant_in            : in std_logic;
+41.		grant_out	    : out std_logic; 
+42.		request             : out std_logic;
+43.		using_bus           : out std_logic;
+44.	        -- Debug MC
+45.	        write_enable_debug  : out std_logic;
+46.	        data_out_debug      : out std_logic_vector(31 downto 0);
+47.	        busy_debug          : in  std_logic;
+48.	        --Dynamic Insertion of Applications
+49.	        ack_app             : out std_logic;
+50.	        req_app             : in  std_logic_vector(31 downto 0);
+51.	        -- External Memory
+52.	        address             : out std_logic_vector(29 downto 0);
+53.	        data_read           : in  std_logic_vector(31 downto 0)        
+54.	    );
+55.	end entity plasma_busDC;
+56.	
+57.	architecture structural of plasma_busDC is
+58.	    -- Memory map constants.
+59.	    constant DEBUG              : std_logic_vector(31 downto 0):=x"20000000";
+60.	    constant IRQ_MASK           : std_logic_vector(31 downto 0):=x"20000010";
+61.	    constant IRQ_STATUS_ADDR    : std_logic_vector(31 downto 0):=x"20000020";
+62.	    constant TIME_SLICE_ADDR    : std_logic_vector(31 downto 0):=x"20000060";
+63.	    constant FIFO_AVAIL         : std_logic_vector(31 downto 0):=x"20000040";
+64.	    constant END_SIM            : std_logic_vector(31 downto 0):=x"20000080";   
+65.	    constant CLOCK_HOLD         : std_logic_vector(31 downto 0):=x"20000090";
+66.	    constant NET_ADDRESS        : std_logic_vector(31 downto 0):=x"20000140";
+67.	
+68.	    -- Network interface mapping.
+69.	    constant NI_STATUS_READ     : std_logic_vector(31 downto 0):=x"20000100";
+70.	    constant NI_STATUS_SEND     : std_logic_vector(31 downto 0):=x"20000110";
+71.	    constant NI_READ            : std_logic_vector(31 downto 0):=x"20000120";
+72.	    constant NI_WRITE           : std_logic_vector(31 downto 0):=x"20000130";
+73.	    constant NI_CONFIGURATION   : std_logic_vector(31 downto 0):=x"20000140";
+74.	    constant NI_ACK             : std_logic_vector(31 downto 0):=x"20000150";
+75.	    constant NI_NACK            : std_logic_vector(31 downto 0):=x"20000160";
+76.	    constant NI_END             : std_logic_vector(31 downto 0):=x"20000170";
+77.	    
+78.	    -- DMNI mapping.
+79.	    constant DMNI_SIZE           : std_logic_vector(31 downto 0):=x"20000200";
+80.	    constant DMNI_ADDR           : std_logic_vector(31 downto 0):=x"20000210";
+81.	    constant DMNI_SIZE_2         : std_logic_vector(31 downto 0):=x"20000204";
+82.	    constant DMNI_ADDR_2         : std_logic_vector(31 downto 0):=x"20000214";
+83.	    constant DMNI_OP             : std_logic_vector(31 downto 0):=x"20000220";
+84.	    constant START_DMNI          : std_logic_vector(31 downto 0):=x"20000230";
+85.	    constant DMNI_ACK            : std_logic_vector(31 downto 0):=x"20000240";
+86.	
+87.	    constant DMNI_SEND_ACTIVE    : std_logic_vector(31 downto 0):=x"20000250";
+88.	    constant DMNI_RECEIVE_ACTIVE : std_logic_vector(31 downto 0):=x"20000260";
+89.	
+90.	    constant SCHEDULING_REPORT   : std_logic_vector(31 downto 0):=x"20000270";
+91.	
+92.	    
+93.	    constant TICK_COUNTER_ADDR  : std_logic_vector(31 downto 0):=x"20000300";    
+94.	    constant REQ_APP_REG        : std_logic_vector(31 downto 0):=x"20000350";
+95.	    constant ACK_APP_REG        : std_logic_vector(31 downto 0):=x"20000360";
+96.	
+97.	    constant PENDING_SERVICE_INTR : std_logic_vector(31 downto 0):=x"20000400";
+98.	
+99.	    
+100.	    signal cpu_mem_address_reg           : std_logic_vector(31 downto 0);
+101.	    signal cpu_mem_data_write_reg        : std_logic_vector(31 downto 0);
+102.	    signal cpu_mem_write_byte_enable_reg : std_logic_vector(3 downto 0); 
+103.	    signal irq_mask_reg                  : std_logic_vector(7 downto 0);
+104.	    signal irq_status                    : std_logic_vector(7 downto 0); 
+105.	    signal irq                           : std_logic;
+106.	    signal time_slice                    : std_logic_vector(31 downto 0);
+107.	    signal write_enable                  : std_logic; 
+108.	    signal tick_counter_local            : std_logic_vector(31 downto 0);  
+109.	    signal tick_counter                  : std_logic_vector(31 downto 0);            
+110.	    signal current_page                  : std_logic_vector(7 downto 0); 
+111.	    
+112.	    --cpu
+113.	    signal cpu_mem_address               : std_logic_vector(31 downto 0);
+114.	    signal cpu_mem_data_write            : std_logic_vector(31 downto 0);
+115.	    signal cpu_mem_data_read             : std_logic_vector(31 downto 0);
+116.	    signal cpu_mem_write_byte_enable     : std_logic_vector(3 downto 0);
+117.	    signal cpu_mem_pause                 : std_logic;    
+118.	    signal cpu_enable_ram            : std_logic;
+119.	    signal cpu_set_size              : std_logic;
+120.	    signal cpu_set_address           : std_logic;
+121.	    signal cpu_set_size_2            : std_logic;
+122.	    signal cpu_set_address_2         : std_logic;
+123.	    signal cpu_set_op                : std_logic;
+124.	    signal cpu_start                 : std_logic;
+125.	    signal cpu_ack                   : std_logic;
+126.	    signal clock_aux                 : std_logic;       
+127.	    signal clock_hold_s              : std_logic; 
+128.	
+129.	    signal pending_service           : std_logic;   
+130.	
+131.	
+132.	    --ram
+133.	    signal data_read_ram  : std_logic_vector(31 downto 0);
+134.	    signal mem_data_read  : std_logic_vector(31 downto 0);
+135.	    
+136.	    --mc debug 
+137.	    signal debug_busy        : std_logic;
+138.	    signal debug_write_data  : std_logic; 
+139.	    signal debug_write_busy  : std_logic;
+140.	    signal debug_data_avail  : std_logic; 
+141.	    
+142.	    --network interface
+143.	    signal ni_intr       : std_logic;
+144.	    
+145.	    --dmni    
+146.	    signal dmni_mem_address           : std_logic_vector( 31 downto 0);
+147.	    signal dmni_mem_addr_ddr          : std_logic_vector(31 downto 0);
+148.	    signal dmni_mem_ddr_read_req      : std_logic;
+149.	    signal mem_ddr_access             : std_logic;
+150.	    signal dmni_mem_write_byte_enable : std_logic_vector(3 downto 0);
+151.	    signal dmni_mem_data_write        : std_logic_vector(31 downto 0);
+152.	    signal dmni_mem_data_read         : std_logic_vector(31 downto 0);
+153.	    signal dmni_data_read             : std_logic_vector(31 downto 0);
+154.	    signal dmni_enable_internal_ram   : std_logic;
+155.	    signal dmni_send_active_sig       : std_logic;
+156.	    signal dmni_receive_active_sig    : std_logic;
+157.	    signal address_mux                : std_logic_vector(31 downto 2);
+158.	    signal cpu_mem_address_reg2       : std_logic_vector(31 downto 0);
+159.	    signal addr_a                     : std_logic_vector(31 downto 2);
+160.	    signal addr_b                     : std_logic_vector(31 downto 2);
+161.	    signal cpu_repo_access            : std_logic := '0';
+162.	    --logfile signals
+163.	    signal data_av                    : std_logic;
+164.	    signal end_sim_reg : std_logic_vector(31 downto 0);
+165.	    type repo_state is (WAIT_state, COPY_FROM_REP);
+166.	    signal repo_FSM: repo_state;
+167.	    signal data_read_reg              : std_logic_vector(31 downto 0);
+168.	    
+169.	    signal l_irq_status : std_logic_vector(7 downto 0);
+170.	    signal new_mem_address : std_logic_vector(31 downto 0);
+171.	    --emulated uart log_file
+172.	    signal uart_write_data : std_logic;
+173.		-- Data to Bridge
+174.	   signal tx_dmni : std_logic;
+175.	   signal data_out_dmni: regflit;
+176.	   signal credit_i_dmni: std_logic;
+177.	
+178.	   signal clock_tx: std_logic;
+179.	   signal clock_rx: std_logic;
+180.	        
+181.	begin
+182.	        u1_cpu: entity work.mlite_cpu
+183.	        port map (
+184.	            clk          => clock_hold_s,                      
+185.	            reset_in     => reset,                      
+186.	            intr_in      => irq,                        
+187.	                                                        
+188.	            mem_address   => cpu_mem_address,               
+189.	            mem_data_w    => cpu_mem_data_write,             
+190.	            mem_data_r    => cpu_mem_data_read,          
+191.	            mem_byte_we   => cpu_mem_write_byte_enable,  
+192.	            mem_pause     => cpu_mem_pause
+193.	        );
+194.	
+195.	    MASTER_RAM : if is_master = '1' generate
+196.	        u2_ram: entity work.ram_master
+197.	        port map (
+198.	            clk     => clock,                       
+199.	
+200.	            enable_a        => cpu_enable_ram,         
+201.	            wbe_a           => cpu_mem_write_byte_enable,           
+202.	            address_a       => addr_a,
+203.	            data_write_a    => cpu_mem_data_write,          
+204.	            data_read_a     => data_read_ram,
+205.	
+206.	            enable_b        => dmni_enable_internal_ram,         
+207.	            wbe_b           => dmni_mem_write_byte_enable,          
+208.	            address_b       => addr_b,
+209.	            data_write_b    => dmni_mem_data_write,          
+210.	            data_read_b     => mem_data_read
+211.	        );
+212.	    end generate MASTER_RAM;
+213.	    
+214.	    SLAVE_RAM : if is_master = '0' generate
+215.	        u2_ram: entity work.ram_plasma
+216.	        port map (
+217.	            clk             => clock,                       
+218.	
+219.	            enable_a        => cpu_enable_ram,         
+220.	            wbe_a           => cpu_mem_write_byte_enable,        
+221.	            address_a       => addr_a,
+222.	            data_write_a    => cpu_mem_data_write,          
+223.	            data_read_a     => data_read_ram,
+224.	
+225.	            enable_b        => dmni_enable_internal_ram,         
+226.	            wbe_b           => dmni_mem_write_byte_enable,         
+227.	            address_b       => addr_b,
+228.	            data_write_b    => dmni_mem_data_write,          
+229.	            data_read_b     => mem_data_read
+230.	        );
+231.	    end generate SLAVE_RAM;
+232.	        
+233.	    u3_dmni : entity work.dmni
+234.	     generic map ( 
+235.	        address_router => router_address
+236.	    )
+237.	    port map (
+238.	        clock           => clock,           
+239.	        reset           => reset,     
+240.	        --Configuration interface
+241.	        set_address     => cpu_set_address,
+242.	        set_address_2   => cpu_set_address_2,
+243.	        set_size        => cpu_set_size,
+244.	        set_size_2      => cpu_set_size_2,
+245.	        set_op          => cpu_set_op,
+246.	        start           => cpu_start,        
+247.	        config_data     => dmni_data_read,
+248.	        -- Status outputs
+249.	        intr            => ni_intr,
+250.	        send_active     => dmni_send_active_sig,
+251.	        receive_active  => dmni_receive_active_sig,    
+252.	        -- Memory interface
+253.	        mem_address     => dmni_mem_address, 
+254.	        mem_data_write  => dmni_mem_data_write,
+255.	        mem_data_read   => dmni_mem_data_read,
+256.	        mem_byte_we     => dmni_mem_write_byte_enable,      
+257.	        -- Bus Bridge Interface
+258.	        tx              => tx_dmni,
+259.	        data_out        => data_out_dmni,
+260.	        credit_i        => credit_i_dmni,
+261.		clock_tx        => clock_tx,
+262.		-- Bus Interface In
+263.	        rx              => rx,
+264.	        data_in         => data_in,
+265.	        credit_o        => credit_o,
+266.		clock_rx        => clock_rx
+267.	    );
+268.	
+269.		clock_rx <= clock;
+270.	
+271.		-- Data that will be sent to bus is stored on this Buffer
+272.		-- Copy From LocalPort Hermes Buffer            
+273.		Bus_Bridge : entity work.Bus_BridgeDC
+274.	        port map(
+275.			clock     => clock,
+276.	                reset     => reset,
+277.		-- DMNI Interface
+278.	                rx        => tx_dmni,
+279.		        data_in   => data_out_dmni,
+280.		        credit_o  => credit_i_dmni,
+281.		-- BUS INTERFACE
+282.	                data_out  => data_out,
+283.		        credit_i  => credit_i,
+284.		        tx        => tx,
+285.		        tx_addr   => tx_addr,
+286.		        grant_in  => grant_in,
+287.		        grant_out => grant_out,
+288.		        request   => request,
+289.		        using_bus => using_bus
+290.	        );
+291.	
+292.	    repo_to_mem_access: process(clock,reset)
+293.	    begin
+294.	        if reset = '1' then
+295.	            repo_FSM <= WAIT_state;
+296.	            cpu_repo_access <= '0';
+297.	        elsif rising_edge(clock) then
+298.	            case( repo_FSM ) is            
+299.	                when WAIT_state =>
+300.	                    if(cpu_mem_address(30 downto 28) = "001") then
+301.	                        cpu_repo_access <= '1';
+302.	                        repo_FSM <= COPY_FROM_REP;
+303.	                    end if;
+304.	                when COPY_FROM_REP =>
+305.	                    repo_FSM <= WAIT_state;
+306.	                    cpu_repo_access <= '0';
+307.	            end case ;
+308.	        end if;
+309.	    end process repo_to_mem_access;
+310.	
+311.	    SLAVE_DEBUG : if (is_master = '0') generate
+312.	       u4_UartFile: entity work.UartFile
+313.	       generic map (
+314.	           log_file => log_file
+315.	       )
+316.	       port map (
+317.	           reset           => reset,                         
+318.	           data_av         => uart_write_data,          
+319.	           data_in         => cpu_mem_data_write_reg
+320.	       );
+321.	
+322.	       uart_write_data     <= '1' when cpu_mem_address_reg = DEBUG and write_enable = '1' else '0';
+323.	
+324.	       debug_busy          <= '0';
+325.	       debug_write_busy    <= '0';
+326.	       debug_data_avail    <= '0';
+327.	    end generate SLAVE_DEBUG; 
+328.	
+329.	    MUX_CPU : cpu_mem_data_read <= data_read when cpu_mem_address_reg(30 downto 28) = "001" else   -- External RAM
+330.	                                    ZERO(31 downto 8) & irq_mask_reg when cpu_mem_address_reg = IRQ_MASK else
+331.	                                    ZERO(31 downto 8) & irq_status when cpu_mem_address_reg = IRQ_STATUS_ADDR else
+332.	                                    time_slice when cpu_mem_address_reg = TIME_SLICE_ADDR else
+333.	                                    ZERO(31 downto 16) & router_address when cpu_mem_address_reg = NET_ADDRESS else
+334.	                                    tick_counter when cpu_mem_address_reg = TICK_COUNTER_ADDR else  
+335.	                                    req_app when cpu_mem_address_reg = REQ_APP_REG else                                 
+336.	                                    ZERO(31 downto 1) & dmni_send_active_sig when cpu_mem_address_reg = DMNI_SEND_ACTIVE else                                    
+337.	                                    ZERO(31 downto 1) & dmni_receive_active_sig when cpu_mem_address_reg = DMNI_RECEIVE_ACTIVE else
+338.	                                    data_read_ram;
+339.	    
+340.	    --Comb assignments
+341.	    addr_a(31 downto 28) <= cpu_mem_address(31 downto 28);   
+342.	    addr_a(27 downto PAGE_SIZE_H_INDEX+1)   <= ZERO(27 downto PAGE_SIZE_H_INDEX+9) & current_page when current_page /= "00000000" and cpu_mem_address(31 downto PAGE_SIZE_H_INDEX+1) /= ZERO(31 downto PAGE_SIZE_H_INDEX+1)
+343.	                                           else cpu_mem_address(27 downto PAGE_SIZE_H_INDEX+1);               
+344.	    addr_a(PAGE_SIZE_H_INDEX downto 2) <= cpu_mem_address(PAGE_SIZE_H_INDEX downto 2);   
+345.	
+346.	    addr_b              <= dmni_mem_address(31 downto 2);
+347.	    write_enable_debug  <= '1' when cpu_mem_address_reg = DEBUG and write_enable = '1' else '0';
+348.	    data_av             <= '1' when cpu_mem_address_reg = DEBUG and write_enable = '1' else '0';
+349.	    data_out_debug      <= cpu_mem_data_write_reg;
+350.	    debug_write_busy    <= busy_debug;
+351.	    debug_busy          <= '1' when cpu_mem_address_reg = DEBUG and write_enable = '1' and busy_debug = '1' else '0';
+352.	    cpu_mem_pause       <= cpu_repo_access or debug_busy;
+353.	    irq                 <= '1' when (irq_status /= x"00" and irq_mask_reg /= x"00") else '0';
+354.	    dmni_data_read      <= cpu_mem_data_write_reg; 
+355.	    dmni_mem_data_read  <= mem_data_read  when dmni_enable_internal_ram = '1' else data_read;  
+356.	    cpu_enable_ram              <= '1' when cpu_mem_address(30 downto 28) = "000" else '0';      
+357.	    dmni_enable_internal_ram    <= '1' when dmni_mem_address(30 downto 28) = "000" else '0';     
+358.	    end_sim_reg         <= x"00000000" when cpu_mem_address_reg = END_SIM and write_enable = '1' else x"00000001";
+359.	    irq_status(7 downto 4) <=  "00" & ni_intr & '0';
+360.	    irq_status(3) <= '1' when time_slice = x"00000001" else '0';
+361.	    irq_status(2 downto 1) <= "00";
+362.	    irq_status(0) <= (not dmni_send_active_sig and pending_service);
+363.	    
+364.	    cpu_set_size        <= '1' when cpu_mem_address_reg = DMNI_SIZE and write_enable = '1' else '0';
+365.	    cpu_set_address     <= '1' when cpu_mem_address_reg = DMNI_ADDR and write_enable = '1' else '0';
+366.	    cpu_set_size_2      <= '1' when cpu_mem_address_reg = DMNI_SIZE_2 and write_enable = '1' else '0';
+367.	    cpu_set_address_2   <= '1' when cpu_mem_address_reg = DMNI_ADDR_2 and write_enable = '1' else '0';
+368.	    cpu_set_op          <= '1' when (cpu_mem_address_reg = DMNI_OP and write_enable = '1') else '0';
+369.	    cpu_start           <= '1' when (cpu_mem_address_reg = START_DMNI and write_enable = '1') else '0';
+370.	    
+371.	    write_enable <= '1' when cpu_mem_write_byte_enable_reg /= "0000" else '0';
+372.	
+373.	    process(cpu_repo_access, dmni_mem_address)
+374.	    begin
+375.	        if(cpu_repo_access = '1') then 
+376.	            address(29 downto 0) <= cpu_mem_address(29 downto 0) ;
+377.	        elsif dmni_mem_address(30 downto 28) = "001" then
+378.	            address(29 downto 0) <= dmni_mem_address(29 downto 0);
+379.	        end if;
+380.	    end process;
+381.	
+382.	    sequential_attr: process(clock, reset)
+383.	    begin            
+384.	        if reset = '1' then
+385.	            cpu_mem_address_reg <= ZERO;
+386.	            cpu_mem_data_write_reg <= ZERO;
+387.	            cpu_mem_write_byte_enable_reg <= ZERO(3 downto 0);
+388.	            irq_mask_reg <= ZERO(7 downto 0);
+389.	            time_slice <= ZERO;
+390.	            tick_counter <= ZERO;
+391.	            pending_service <= '0';
+392.	            ack_app <= '0';
+393.	        elsif (clock'event and clock = '1') then
+394.	            if cpu_mem_pause = '0' then
+395.	                cpu_mem_address_reg <= cpu_mem_address;
+396.	                cpu_mem_data_write_reg <= cpu_mem_data_write;
+397.	                cpu_mem_write_byte_enable_reg <= cpu_mem_write_byte_enable;
+398.	        
+399.	                if cpu_mem_address_reg = IRQ_MASK and write_enable = '1' then
+400.	                    irq_mask_reg <= cpu_mem_data_write_reg(7 downto 0);
+401.	                end if;     
+402.	               -- Decrements the time slice when executing a task (current_page /= x"00") or handling a syscall (syscall = '1')
+403.	                if time_slice > 1 then
+404.	                    time_slice <= time_slice - 1;
+405.	                end if;  
+406.	
+407.	                if(cpu_mem_address_reg = PENDING_SERVICE_INTR and write_enable = '1') then
+408.	                    if cpu_mem_data_write_reg = ZERO then
+409.	                        pending_service <= '0';
+410.	                    else
+411.	                        pending_service <= '1';
+412.	                    end if;
+413.	                end if; 
+414.	            end if;
+415.	                                    
+416.	            if cpu_mem_address_reg = TIME_SLICE_ADDR and write_enable = '1' then
+417.	                time_slice <= cpu_mem_data_write_reg;
+418.	            end if;
+419.	                
+420.	            if cpu_mem_address_reg = ACK_APP_REG then
+421.	                ack_app <= '1';
+422.	            elsif req_app(31) = '0' then 
+423.	                ack_app <= '0';
+424.	            end if;
+425.	
+426.	            tick_counter <= tick_counter + 1;   
+427.	        end if;
+428.	    end process sequential_attr;
+429.	
+430.	    clock_stop: process(reset,clock)
+431.	    begin
+432.	        if(reset = '1') then
+433.	            tick_counter_local <= (others=> '0');
+434.	            clock_aux <= '1';
+435.	        else
+436.	            if cpu_mem_address_reg = CLOCK_HOLD and write_enable = '1' then
+437.	                clock_aux <= '0';
+438.	            elsif rx = '1' or ni_intr = '1' then 
+439.	                clock_aux <= '1';
+440.	            end if;
+441.	
+442.	            if(clock_aux ='1' and clock ='1') then
+443.	                clock_hold_s <= '1';
+444.	                tick_counter_local <= tick_counter_local + 1;
+445.	            else
+446.	                clock_hold_s <= '0';
+447.	            end if;
+448.	        end if;
+449.	    end process clock_stop;
+450.	
+451.	end architecture structural;

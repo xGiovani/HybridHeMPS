@@ -1,0 +1,56 @@
+1.	----------------------------------------------------------------------------------
+2.	-- Company: UFSM
+3.	-- Engineer: Julia Grando
+4.	-- 
+5.	-- Create Date:    16:30:04 04/27/2017 
+6.	-- Design Name: 
+7.	-- Module Name:    BUS_ARB - Behavioral 
+8.	-- Project Name: 
+9.	-- Target Devices: 
+10.	-- Tool versions: 
+11.	-- Description: 
+12.	--
+13.	-- Dependencies: 
+14.	--
+15.	-- Revision: 
+16.	-- Revision 0.01 - File Created
+17.	-- Additional Comments: 
+18.	--
+19.	----------------------------------------------------------------------------------
+20.	library IEEE;
+21.	use ieee.std_logic_1164.all;
+22.	use IEEE.math_real.all;
+23.	use ieee.std_logic_arith.all;
+24.	use ieee.std_logic_unsigned.all;
+25.	use work.HeMPS_PKG.all;
+26.	use work.HeMPS_defaults.all;
+27.	
+28.	entity bus_arb_gen is
+29.	    generic(
+30.	    	NUMBER_PROC_CROSSBAR : integer := 2);
+31.	    Port( 
+32.	        reset : in  STD_LOGIC;
+33.		REQ : in  STD_LOGIC_VECTOR(NUMBER_PROC_CROSSBAR downto 0);
+34.	        GRANT : out  STD_LOGIC_VECTOR(NUMBER_PROC_CROSSBAR downto 0));
+35.	end bus_arb_gen;
+36.	
+37.	architecture bus_arb_gen of bus_arb_gen is
+38.	begin
+39.		process(REQ, reset)
+40.		begin
+41.		for i in 0 to NUMBER_PROC_CROSSBAR loop	
+42.			if reset = '1' then
+43.				GRANT <= (others=>'0');
+44.				GRANT(0) <= '1';
+45.			elsif REQ(i) = '0' then
+46.				GRANT(i) <= '0';		
+47.			elsif REQ(i) = '1' then
+48.				GRANT <= (others=>'0');
+49.				GRANT(i) <= '1';
+50.				exit;
+51.			end if;
+52.		end loop;
+53.		end process;
+54.			
+55.	end bus_arb_gen;
+56.	

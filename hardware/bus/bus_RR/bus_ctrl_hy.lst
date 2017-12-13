@@ -1,0 +1,76 @@
+1.	---------------------------------------------
+2.	-- Implementation of HeMPS Bus
+3.	---------------------------------------------
+4.	library ieee;
+5.	use ieee.std_logic_1164.all;
+6.	use IEEE.numeric_std.all;
+7.	use work.HeMPS_defaults.all;
+8.	use work.HeMPS_PKG.all;
+9.	
+10.	entity bus_ctrl_hy is
+11.		generic(
+12.			BusID           : integer := 0;
+13.			NUMBER_PROC_BUS : integer
+14.		);
+15.		port(	 
+16.			-- Input to bus
+17.			tx         : in std_logic_vector(NUMBER_PROC_BUS downto 0);
+18.			data_out   : in arrayNregflit(0 to NUMBER_PROC_BUS);
+19.			credit_o   : in std_logic_vector(NUMBER_PROC_BUS downto 0);
+20.			-- Bus Data to processors
+21.			bus_data   : out regflit;
+22.			bus_rx     : out std_logic_vector(NUMBER_PROC_BUS downto 0);
+23.			bus_credit : out std_logic;
+24.			-- Control Signals
+25.			using_bus  : in std_logic_vector(NUMBER_PROC_BUS downto 0);
+26.			tx_addr    : in arrayNregflit(0 to NUMBER_PROC_BUS)
+27.		);
+28.	end bus_ctrl_hy;
+29.	
+30.	architecture bus_ctrl_hy of bus_ctrl_hy is
+31.		signal source, target: integer range NUMBER_PROC_BUS downto 0;
+32.		signal tmp: UNSIGNED(NUMBER_PROC_BUS downto 0) := (others=>'0');
+33.		signal Proc_Addr: Proc_Addresses(0 to NUMBER_PROC_BUS-1);
+34.	begin
+35.		-- Processors's Addresses 
+36.		Proc_Addr <= Bus_Proc_Addr when NUMBER_BUSES = 1 else 
+37.			     Bus_Proc_Addrs(BusID)(0 to NUMBER_PROC_BUS-1);
+38.	
+39.		-- Data from source processor
+40.		bus_data <= data_out(source);
+41.		-- Source processor receives credit from target processor
+42.		bus_credit <= credit_o(target);
+43.	
+44.		-- Source/Target processor
+45.		process(using_bus)
+46.		begin
+47.		-- Source processor
+48.		for i in 0 to NUMBER_PROC_BUS loop
+49.			if using_bus(i) = '1' then
+50.				source <= i;
+51.				exit;
+52.			end if;
+53.		end loop;
+54.		end process;
+55.	
+56.		tmp(0) <= '1';
+57.		-- Activate the correct rx
+58.		bus_rx <= (others=>'0') when tx = (NUMBER_PROC_BUS downto 0 => '0') else std_logic_vector(tmp sll target);
+59.	
+60.		--Targer Processor
+61.		process(tx_addr,source)
+62.		variable toWrapper : std_logic := '0'; -- variable to indicate if the target element is a processor on the bus or the wrapper
+63.		begin
+64.		toWrapper := '1';
+65.		for i in 0 to NUMBER_PROC_BUS-1 loop
+66.			if tx_addr(source)(15 downto 0) = Proc_Addr(i)(15 downto 0)  then -- Compare the first flit with the proc. addresses on this bus
+67.				target <= i;
+68.				toWrapper := '0';
+69.			end if;
+70.		end loop;
+71.			if toWrapper = '1' then
+72.				target <= NUMBER_PROC_BUS; -- Activate wrapper rx
+73.			end if;
+74.		end process;
+75.	
+76.	end bus_ctrl_hy;
